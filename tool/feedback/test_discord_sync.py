@@ -3,7 +3,9 @@
     python3 -m unittest discover tool/feedback
 """
 
+import os
 import unittest
+from unittest import mock
 
 import discord_sync as ds
 
@@ -90,6 +92,166 @@ class LogicTest(unittest.TestCase):
     def test_closing(self):
         self.assertIn("C'est fait", ds.closing_message({"state_reason": "completed"}))
         self.assertIn("pas le faire", ds.closing_message({"state_reason": "not_planned"}))
+
+    def test_mentions_neutralized(self):
+        self.assertEqual(ds.gh_safe("merci @marc et @everyone"), "merci @\u200bmarc et @\u200beveryone")
+        self.assertEqual(ds.gh_safe("mail a @ b"), "mail a @ b")
+        body = ds.issue_body({"id": "1"}, {"author": {"username": "x"}, "content": "cc @octocat"}, "9", 0)
+        self.assertNotIn("@octocat", body)
+
+    def test_seen_marker(self):
+        self.assertEqual(ds.seen_id("pas de marqueur", "111"), "111")
+        body = ds.with_seen("texte", "200")
+        self.assertEqual(ds.seen_id(body, "111"), "200")
+        body = ds.with_seen(body, "300")
+        self.assertEqual(ds.seen_id(body, "111"), "300")
+        self.assertEqual(body.count("discord-seen"), 1)
+
+    def test_replies_to_copy(self):
+        messages = [
+            {"id": "130", "author": {"username": "seb"}, "content": "Oui, sur l'autoroute"},
+            {"id": "111", "author": {"username": "Cono Moto", "bot": True}, "webhook_id": "5"},
+            {"id": "120", "author": {"username": "ConoBot", "bot": True}, "content": "📌 Bien reçu !"},
+            {"id": "125", "author": {"username": "julien"}, "content": "Moi aussi", "type": 19},
+            {"id": "126", "author": {"username": "julien"}, "content": "", "type": 18},
+        ]
+        self.assertEqual([m["id"] for m in ds.replies_to_copy(messages, "111")], ["125", "130"])
+
+    def test_reply_comment(self):
+        c = ds.reply_comment({
+            "id": "130",
+            "author": {"username": "seb_moto", "global_name": "Seb"},
+            "content": "Ça arrive sur l'A7\nvers Lyon @marc",
+            "attachments": [{"content_type": "image/jpeg", "url": "https://cdn/y.jpg"}],
+        })
+        self.assertIn("**💬 Seb sur Discord :**", c)
+        self.assertIn("> Ça arrive sur l'A7\n> vers Lyon @\u200bmarc", c)
+        self.assertIn("![capture](https://cdn/y.jpg)", c)
+        self.assertIn("<!-- discord-msg:130 -->", c)
+        self.assertNotIn(ds.REPLY_MARKER, c)
+
+
+class FakeApi:
+    """Discord + GitHub en mémoire, branchés à la place de Http."""
+
+    def __init__(self):
+        self.threads = {"500": {"id": "500", "name": "🐞 La carte se fige", "parent_id": "42", "applied_tags": []}}
+        self.messages = {
+            "500": [
+                {"id": "500", "author": {"username": "Cono Moto", "bot": True}, "webhook_id": "1",
+                 "content": "", "embeds": [{"description": "Plus rien ne bouge après 10 min.",
+                                            "fields": [{"name": "Type", "value": "🐞 Bug"},
+                                                       {"name": "De la part de", "value": "Julien"}]}]},
+            ]
+        }
+        self.issues: list[dict] = []
+        self.comments: dict[int, list[dict]] = {}
+        self.discord_posts: list[tuple[str, str]] = []
+        self.next_id = 900
+
+    def new_id(self):
+        self.next_id += 1
+        return str(self.next_id)
+
+    def discord(self, method, path, body):
+        if path == "/channels/42":
+            return {"guild_id": "7", "available_tags": []}
+        if path == "/guilds/7/threads/active":
+            return {"threads": list(self.threads.values())}
+        if path.startswith("/channels/42/threads/archived"):
+            return {"threads": []}
+        tid = path.split("/")[2]
+        if method == "GET" and "?after=" in path:
+            after = int(path.split("after=")[1].split("&")[0])
+            return [m for m in self.messages[tid] if int(m["id"]) > after][::-1]
+        if method == "GET":
+            return self.messages[tid][0]
+        if method == "POST":
+            self.discord_posts.append((tid, body["content"]))
+            self.messages[tid].append({"id": self.new_id(), "author": {"username": "ConoBot", "bot": True},
+                                       "content": body["content"]})
+            return {}
+        raise AssertionError(path)
+
+    def github(self, method, path, body):
+        if path.endswith("/labels?per_page=100"):
+            return []
+        if path.endswith("/labels"):
+            return {}
+        if method == "GET" and "/issues?labels=feedback" in path:
+            return self.issues
+        if method == "POST" and path.endswith("/issues"):
+            issue = {"number": len(self.issues) + 1, "state": "open", **body}
+            self.issues.append(issue)
+            self.comments[issue["number"]] = []
+            return issue
+        number = int(path.split("/issues/")[1].split("/")[0].split("?")[0])
+        issue = self.issues[number - 1]
+        if "/comments" in path and method == "GET":
+            return self.comments[number]
+        if "/comments" in path and method == "POST":
+            self.comments[number].append({"id": int(self.new_id()), **body})
+            return {}
+        if method == "PATCH":
+            issue.update(body)
+            return issue
+        raise AssertionError(path)
+
+    def http(self, base, headers):
+        route = self.discord if base == ds.DISCORD_API else self.github
+
+        class _Http:
+            def call(self, method, path, body=None):
+                return route(method, path, body)
+
+        return _Http()
+
+
+class MainTest(unittest.TestCase):
+    ENV = {"DISCORD_BOT_TOKEN": "t", "DISCORD_FORUM_CHANNEL_ID": "42", "GITHUB_TOKEN": "g",
+           "GITHUB_REPOSITORY": "moi/cono-moto"}
+
+    def run_sync(self, api):
+        with mock.patch.dict(os.environ, self.ENV), mock.patch.object(ds, "Http", api.http), \
+                mock.patch("builtins.print"):
+            return ds.main()
+
+    def test_full_conversation(self):
+        api = FakeApi()
+        # 1. Nouveau fil → ticket + « bien reçu »
+        self.assertEqual(self.run_sync(api), 0)
+        self.assertEqual(len(api.issues), 1)
+        issue = api.issues[0]
+        self.assertEqual(issue["title"], "[Bug] La carte se fige")
+        self.assertEqual(issue["labels"], ["feedback", "bug"])
+        self.assertIn("Bien reçu", api.discord_posts[0][1])
+        self.assertEqual(api.comments[1], [])
+
+        # 2. Claude pose une question sur GitHub → repostée dans le fil
+        api.comments[1].append({"id": 1, "body": ds.REPLY_MARKER + "\nSalut Julien ! Android ou iPhone ?"})
+        self.run_sync(api)
+        self.assertEqual(api.discord_posts[-1][1], "Salut Julien ! Android ou iPhone ?")
+
+        # 3. Julien répond dans Discord → recopié sur GitHub, une seule fois
+        api.messages["500"].append({"id": api.new_id(), "author": {"username": "julien"}, "content": "iPhone 13"})
+        self.run_sync(api)
+        self.run_sync(api)
+        copied = [c for c in api.comments[1] if "discord-msg" in c["body"]]
+        self.assertEqual(len(copied), 1)
+        self.assertIn("> iPhone 13", copied[0]["body"])
+        self.assertEqual(sum("Android ou iPhone" in p for _, p in api.discord_posts), 1)
+
+        # 4. Ticket fermé → annonce une seule fois
+        issue["state"] = "closed"
+        issue["state_reason"] = "completed"
+        self.run_sync(api)
+        self.run_sync(api)
+        self.assertEqual(sum("C'est fait" in p for _, p in api.discord_posts), 1)
+
+    def test_without_secrets_does_nothing(self):
+        with mock.patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "", "DISCORD_FORUM_CHANNEL_ID": ""}), \
+                mock.patch("builtins.print"):
+            self.assertEqual(ds.main(), 0)
 
 
 if __name__ == "__main__":

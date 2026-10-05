@@ -7,9 +7,11 @@ Lancé toutes les heures par .github/workflows/feedback-sync.yml :
    devient un ticket GitHub (étiquettes « feedback » + « idée » / « bug »),
    et le bot répond « bien reçu » dans le fil ;
 2. le nombre de 👍 du premier message est recopié dans le ticket ;
-3. un commentaire GitHub contenant <!-- pour-discord --> est reposté dans le
+3. les réponses des potes dans le fil Discord sont recopiées en commentaires
+   du ticket (pour qu'une question posée par Claude ait sa réponse) ;
+4. un commentaire GitHub contenant <!-- pour-discord --> est reposté dans le
    fil Discord (c'est ainsi que Claude répond aux potes) ;
-4. quand le ticket est fermé, le bot annonce « c'est fait » (ou « pas prévu »).
+5. quand le ticket est fermé, le bot annonce « c'est fait » (ou « pas prévu »).
 
 Sans dépendance (urllib). Variables d'environnement :
   DISCORD_BOT_TOKEN, DISCORD_FORUM_CHANNEL_ID, GITHUB_TOKEN, GITHUB_REPOSITORY
@@ -32,6 +34,8 @@ USER_AGENT = "ConoMotoFeedbackSync/1.0 (+https://github.com)"
 THREAD_MARKER = "discord-thread"
 POSTED_MARKER = "discord-posted"
 NOTIFIED_MARKER = "discord-notified"
+SEEN_MARKER = "discord-seen"
+MESSAGE_MARKER = "discord-msg"
 REPLY_MARKER = "<!-- pour-discord -->"
 VOTES_RE = re.compile(r"^\*\*👍 Votes :\*\* \d+$", re.M)
 
@@ -98,14 +102,20 @@ def describe_starter(starter: dict | None) -> tuple[str, str, list[str], str | N
     return (author, text or "_(pas de texte)_", infos, image)
 
 
+def gh_safe(text: str) -> str:
+    """Neutralise les @mentions : un « @marc » écrit sur Discord ne doit pas
+    notifier un inconnu sur GitHub."""
+    return re.sub(r"@(?=[\w-])", "@\u200b", text)
+
+
 def issue_body(thread: dict, starter: dict | None, guild_id: str, votes: int) -> str:
     author, text, infos, image = describe_starter(starter)
     link = f"https://discord.com/channels/{guild_id}/{thread['id']}"
     lines = [
-        text,
+        gh_safe(text),
         "",
         "---",
-        f"**De :** {author}  ",
+        f"**De :** {gh_safe(author)}  ",
         f"**Discord :** [ouvrir le fil]({link})",
         f"**👍 Votes :** {votes}",
     ]
@@ -137,6 +147,46 @@ def with_posted(body: str, ids: set[str]) -> str:
 
 def with_votes(body: str, votes: int) -> str:
     return VOTES_RE.sub(f"**👍 Votes :** {votes}", body)
+
+
+def seen_id(body: str, thread_id: str) -> str:
+    """Dernier message du fil déjà recopié (le premier message par défaut)."""
+    m = re.search(rf"<!-- {SEEN_MARKER}:(\d+) -->", body or "")
+    return m.group(1) if m else thread_id
+
+
+def with_seen(body: str, message_id: str) -> str:
+    marker = f"<!-- {SEEN_MARKER}:{message_id} -->"
+    if re.search(rf"<!-- {SEEN_MARKER}:\d+ -->", body):
+        return re.sub(rf"<!-- {SEEN_MARKER}:\d+ -->", marker, body)
+    return body.rstrip() + "\n" + marker
+
+
+def replies_to_copy(messages: list[dict], thread_id: str) -> list[dict]:
+    """Messages des potes à recopier, du plus ancien au plus récent : ni le
+    premier message, ni ceux du bot ou d'un webhook (réponses déjà sur GitHub)."""
+    keep = [
+        m for m in messages
+        if m.get("id") != thread_id
+        and not m.get("webhook_id")
+        and not (m.get("author") or {}).get("bot")
+        and m.get("type", 0) in (0, 19)
+    ]
+    return sorted(keep, key=lambda m: int(m["id"]))
+
+
+def reply_comment(message: dict) -> str:
+    author = (message.get("author") or {})
+    name = author.get("global_name") or author.get("username") or "inconnu"
+    lines = [f"**💬 {gh_safe(name)} sur Discord :**", ""]
+    text = (message.get("content") or "").strip()
+    if text:
+        lines.append("\n".join("> " + l for l in gh_safe(text).splitlines()))
+    for a in message.get("attachments", []):
+        if (a.get("content_type") or "").startswith("image/"):
+            lines += ["", f"![capture]({a.get('url')})"]
+    lines += ["", f"<!-- {MESSAGE_MARKER}:{message['id']} -->"]
+    return "\n".join(lines)
 
 
 def discord_text(comment_body: str) -> str:
@@ -238,61 +288,80 @@ def main() -> int:
         page += 1
     by_thread = {tid: i for i in issues if (tid := thread_id_of(i))}
 
-    created = 0
+    created = copied = errors = 0
     for t in threads:
         tid = t["id"]
         try:
-            starter = discord.call("GET", f"/channels/{tid}/messages/{tid}")
-        except RuntimeError:
-            starter = None
-        votes = votes_of(starter)
-        issue = by_thread.get(tid)
-        if issue is None:
-            kind = kind_of(t, starter, forum_tags)
-            prefix = {"bug": "[Bug]", "idée": "[Idée]"}.get(kind, "[Retour]")
-            labels = ["feedback"] + ([kind] if kind in LABELS else [])
-            issue = github.call("POST", f"/repos/{repo}/issues", {
-                "title": f"{prefix} {clean_title(t.get('name', ''))}"[:250],
-                "body": issue_body(t, starter, guild_id, votes),
-                "labels": labels,
-            })
-            by_thread[tid] = issue
-            created += 1
             try:
-                discord.call("POST", f"/channels/{tid}/messages", {
-                    "content": f"📌 Bien reçu ! C'est noté (n°{issue['number']}). On te répond ici dès qu'on l'a regardé.",
-                    "allowed_mentions": {"parse": []},
+                starter = discord.call("GET", f"/channels/{tid}/messages/{tid}")
+            except RuntimeError:
+                starter = None
+            votes = votes_of(starter)
+            issue = by_thread.get(tid)
+            if issue is None:
+                kind = kind_of(t, starter, forum_tags)
+                prefix = {"bug": "[Bug]", "idée": "[Idée]"}.get(kind, "[Retour]")
+                labels = ["feedback"] + ([kind] if kind in LABELS else [])
+                issue = github.call("POST", f"/repos/{repo}/issues", {
+                    "title": f"{prefix} {clean_title(t.get('name', ''))}"[:250],
+                    "body": issue_body(t, starter, guild_id, votes),
+                    "labels": labels,
                 })
+                by_thread[tid] = issue
+                created += 1
+                try:
+                    discord.call("POST", f"/channels/{tid}/messages", {
+                        "content": f"📌 Bien reçu ! C'est noté (n°{issue['number']}). On te répond ici dès qu'on l'a regardé.",
+                        "allowed_mentions": {"parse": []},
+                    })
+                except RuntimeError as e:
+                    print(f"::warning::Réponse Discord impossible dans le fil {tid} : {e}")
+
+            body = issue.get("body") or ""
+            # Votes
+            new_body = with_votes(body, votes)
+            # Réponses des potes dans le fil → commentaires du ticket
+            last = seen_id(new_body, tid)
+            try:
+                messages = discord.call("GET", f"/channels/{tid}/messages?after={last}&limit=100") or []
             except RuntimeError as e:
-                print(f"::warning::Réponse Discord impossible dans le fil {tid} : {e}")
-            continue
+                print(f"::warning::Lecture du fil {tid} impossible : {e}")
+                messages = []
+            for m in replies_to_copy(messages, tid):
+                github.call("POST", f"/repos/{repo}/issues/{issue['number']}/comments", {"body": reply_comment(m)})
+                copied += 1
+            if messages:
+                newest = max(messages, key=lambda m: int(m["id"]))["id"]
+                if int(newest) > int(last):
+                    new_body = with_seen(new_body, newest)
+            # Commentaires à relayer sur Discord
+            done = posted_ids(new_body)
+            comments = github.call("GET", f"/repos/{repo}/issues/{issue['number']}/comments?per_page=100")
+            for c in comments:
+                cid = str(c["id"])
+                if REPLY_MARKER in (c.get("body") or "") and cid not in done:
+                    text = discord_text(c["body"])
+                    if text:
+                        discord.call("POST", f"/channels/{tid}/messages",
+                                     {"content": text, "allowed_mentions": {"parse": []}})
+                    done.add(cid)
+            if done != posted_ids(new_body):
+                new_body = with_posted(new_body, done)
+            # Ticket fermé : annonce une seule fois
+            if issue.get("state") == "closed" and f"<!-- {NOTIFIED_MARKER} -->" not in new_body:
+                discord.call("POST", f"/channels/{tid}/messages",
+                             {"content": closing_message(issue), "allowed_mentions": {"parse": []}})
+                new_body = new_body.rstrip() + f"\n<!-- {NOTIFIED_MARKER} -->"
+            if new_body != body:
+                github.call("PATCH", f"/repos/{repo}/issues/{issue['number']}", {"body": new_body})
+        except RuntimeError as e:
+            # Un fil en erreur ne bloque pas les autres ; il sera repris au prochain passage.
+            errors += 1
+            print(f"::warning::Fil {tid} : {e}")
 
-        body = issue.get("body") or ""
-        # Votes
-        new_body = with_votes(body, votes)
-        # Commentaires à relayer sur Discord
-        done = posted_ids(new_body)
-        comments = github.call("GET", f"/repos/{repo}/issues/{issue['number']}/comments?per_page=100")
-        for c in comments:
-            cid = str(c["id"])
-            if REPLY_MARKER in (c.get("body") or "") and cid not in done:
-                text = discord_text(c["body"])
-                if text:
-                    discord.call("POST", f"/channels/{tid}/messages",
-                                 {"content": text, "allowed_mentions": {"parse": []}})
-                done.add(cid)
-        if done != posted_ids(new_body):
-            new_body = with_posted(new_body, done)
-        # Ticket fermé : annonce une seule fois
-        if issue.get("state") == "closed" and f"<!-- {NOTIFIED_MARKER} -->" not in new_body:
-            discord.call("POST", f"/channels/{tid}/messages",
-                         {"content": closing_message(issue), "allowed_mentions": {"parse": []}})
-            new_body = new_body.rstrip() + f"\n<!-- {NOTIFIED_MARKER} -->"
-        if new_body != body:
-            github.call("PATCH", f"/repos/{repo}/issues/{issue['number']}", {"body": new_body})
-
-    print(f"Fils Discord vus : {len(threads)} · nouveaux tickets : {created}")
-    return 0
+    print(f"Fils Discord vus : {len(threads)} · nouveaux tickets : {created} · réponses recopiées : {copied}"
+          f" · erreurs : {errors}")
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":

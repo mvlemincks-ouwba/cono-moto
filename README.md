@@ -205,8 +205,8 @@ les potes en discutent et votent 👍. On peut aussi poster directement dans le 
 **b) Le pont Discord → GitHub (pour que les demandes soient traitées)**
 
 Toutes les heures, le workflow « Boîte à idées » recopie chaque nouveau fil du forum en ticket GitHub
-(étiquette `feedback`), met à jour le nombre de 👍, reposte dans Discord les réponses écrites sur le ticket,
-et annonce « ✅ C'est fait » quand le ticket est fermé.
+(étiquette `feedback`), met à jour le nombre de 👍, recopie sur le ticket les réponses des potes dans le fil,
+reposte dans Discord les réponses écrites sur le ticket, et annonce « ✅ C'est fait » quand le ticket est fermé.
 1. <https://discord.com/developers/applications> › **New Application** « Cono Moto » › onglet **Bot** › **Reset Token** › copie le jeton
    → secret **`DISCORD_BOT_TOKEN`**. Sur la même page, active **Message Content Intent**.
 2. Onglet **OAuth2 › URL Generator** : scope `bot`, permissions *View Channels*, *Read Message History*,
@@ -215,9 +215,10 @@ et annonce « ✅ C'est fait » quand le ticket est fermé.
    → secret **`DISCORD_FORUM_CHANNEL_ID`**.
 4. Test : onglet **Actions › Boîte à idées (Discord ↔ GitHub) › Run workflow**.
 
-**c) Le traitement** : chaque jour, une routine Claude Code lit les nouveaux tickets `feedback`, répond aux potes
-(sa réponse est repostée dans le fil Discord), et prépare une pull request pour ce qui est simple et clair.
-Tu n'as plus qu'à fusionner.
+**c) Le traitement** : chaque matin, une routine Claude Code lit les nouveaux tickets `feedback` (et les réponses
+aux questions qu'elle a posées), répond aux potes (sa réponse est repostée dans le fil Discord), trie avec les
+étiquettes `accepté` / `à-préciser` / `à-discuter` / `pas-prévu`, et prépare une pull request pour ce qui est
+simple et clair. Tu n'as plus qu'à fusionner : le ticket se ferme et le fil Discord annonce « C'est fait ».
 
 ### 5. (Facultatif) Ta propre clé de signature
 
