@@ -1,0 +1,92 @@
+{
+ "features": [
+  {
+   "geometry": {
+    "coordinates": [
+     1.8352,
+     48.6439
+    ],
+    "type": "Point"
+   },
+   "type": "Feature",
+   "properties": {
+    "osm_type": "R",
+    "osm_id": 71468,
+    "extent": [
+     1.7558,
+     48.6912,
+     1.8768,
+     48.6116
+    ],
+    "country": "France",
+    "osm_key": "place",
+    "countrycode": "FR",
+    "osm_value": "town",
+    "postcode": "78120",
+    "name": "Rambouillet",
+    "county": "Yvelines",
+    "state": "Île-de-France",
+    "type": "city"
+   }
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     1.8297,
+     48.6437
+    ],
+    "type": "Point"
+   },
+   "type": "Feature",
+   "properties": {
+    "osm_type": "N",
+    "osm_id": 3141592,
+    "country": "France",
+    "city": "Rambouillet",
+    "countrycode": "FR",
+    "postcode": "78120",
+    "county": "Yvelines",
+    "type": "house",
+    "osm_value": "house",
+    "osm_key": "building",
+    "housenumber": "12",
+    "street": "Rue Chasles",
+    "state": "Île-de-France"
+   }
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     4.3517,
+     50.8466
+    ],
+    "type": "Point"
+   },
+   "type": "Feature",
+   "properties": {
+    "osm_type": "R",
+    "osm_id": 58250,
+    "country": "Belgique",
+    "osm_key": "place",
+    "countrycode": "BE",
+    "osm_value": "city",
+    "name": "Bruxelles",
+    "state": "Bruxelles-Capitale",
+    "type": "city"
+   }
+  },
+  {
+   "geometry": {
+    "coordinates": [
+     2.0
+    ],
+    "type": "Point"
+   },
+   "type": "Feature",
+   "properties": {
+    "name": "Cassé"
+   }
+  }
+ ],
+ "type": "FeatureCollection"
+}

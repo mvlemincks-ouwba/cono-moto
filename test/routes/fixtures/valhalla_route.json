@@ -1,0 +1,134 @@
+{
+ "trip": {
+  "locations": [
+   {
+    "type": "break",
+    "lat": 48.6436,
+    "lon": 1.8296,
+    "side_of_street": "right",
+    "original_index": 0
+   },
+   {
+    "type": "break",
+    "lat": 48.6648,
+    "lon": 1.8325,
+    "original_index": 1
+   }
+  ],
+  "legs": [
+   {
+    "maneuvers": [
+     {
+      "type": 1,
+      "instruction": "Conduisez vers l'est sur Rue Chasles.",
+      "time": 73.006,
+      "length": 1.014,
+      "cost": 87.607,
+      "begin_shape_index": 0,
+      "end_shape_index": 3,
+      "travel_mode": "drive",
+      "travel_type": "motorcycle",
+      "verbal_pre_transition_instruction": "Conduisez vers l'est sur Rue Chasles.",
+      "street_names": [
+       "Rue Chasles"
+      ],
+      "verbal_post_transition_instruction": "Continuez sur 1 kilomètre."
+     },
+     {
+      "type": 15,
+      "instruction": "Tournez à gauche sur D 906.",
+      "time": 106.486,
+      "length": 1.479,
+      "cost": 127.784,
+      "begin_shape_index": 3,
+      "end_shape_index": 6,
+      "travel_mode": "drive",
+      "travel_type": "motorcycle",
+      "verbal_pre_transition_instruction": "Tournez à gauche sur D 906, puis prenez le rond-point.",
+      "verbal_transition_alert_instruction": "Tournez à gauche sur D 906.",
+      "street_names": [
+       "D 906"
+      ]
+     },
+     {
+      "type": 26,
+      "instruction": "Prenez le rond-point et prenez la 2e sortie sur D 936.",
+      "time": 2.879,
+      "length": 0.04,
+      "cost": 3.454,
+      "begin_shape_index": 6,
+      "end_shape_index": 7,
+      "travel_mode": "drive",
+      "travel_type": "motorcycle",
+      "verbal_pre_transition_instruction": "Prenez le rond-point et prenez la 2e sortie sur D 936.",
+      "verbal_transition_alert_instruction": "Prenez le rond-point.",
+      "street_names": [
+       "D 936"
+      ],
+      "roundabout_exit_count": 2
+     },
+     {
+      "type": 27,
+      "instruction": "Sortez du rond-point sur D 936.",
+      "time": 85.086,
+      "length": 1.182,
+      "cost": 102.103,
+      "begin_shape_index": 7,
+      "end_shape_index": 10,
+      "travel_mode": "drive",
+      "travel_type": "motorcycle",
+      "verbal_pre_transition_instruction": "Sortez du rond-point sur D 936.",
+      "street_names": [
+       "D 936"
+      ]
+     },
+     {
+      "type": 4,
+      "instruction": "Vous êtes arrivé à votre destination.",
+      "time": 0.0,
+      "length": 0.0,
+      "cost": 0.0,
+      "begin_shape_index": 10,
+      "end_shape_index": 10,
+      "travel_mode": "drive",
+      "travel_type": "motorcycle",
+      "verbal_pre_transition_instruction": "Vous êtes arrivé à votre destination.",
+      "verbal_transition_alert_instruction": "Vous arriverez à votre destination."
+     }
+    ],
+    "summary": {
+     "has_time_restrictions": false,
+     "has_toll": false,
+     "has_highway": false,
+     "has_ferry": false,
+     "min_lat": 48.6436,
+     "min_lon": 1.8296,
+     "max_lat": 48.6648,
+     "max_lon": 1.8439,
+     "time": 267.457,
+     "length": 3.715,
+     "cost": 320.948
+    },
+    "shape": "_`~w{A_mtnBg@gxG{@gxGcB_kHgxGgEgxGwBwkGoAwQwQg{CnlFg{CnlFg{CnlF"
+   }
+  ],
+  "summary": {
+   "has_time_restrictions": false,
+   "has_toll": false,
+   "has_highway": false,
+   "has_ferry": false,
+   "min_lat": 48.6436,
+   "min_lon": 1.8296,
+   "max_lat": 48.6648,
+   "max_lon": 1.8439,
+   "time": 267.457,
+   "length": 3.715,
+   "cost": 320.948
+  },
+  "status_message": "Found route between points",
+  "status": 0,
+  "units": "kilometers",
+  "language": "fr-FR"
+ },
+ "id": "cono-moto"
+}
