@@ -62,6 +62,14 @@ class Endpoints {
   /// Requêtes OpenStreetMap (forêts, cols…).
   static const overpass = 'https://overpass-api.de/api/interpreter';
 
+  /// Serveurs Overpass essayés dans l'ordre : le serveur principal est souvent
+  /// saturé (ou limite les adresses IP partagées des réseaux mobiles).
+  static const overpassMirrors = [
+    overpass,
+    'https://overpass.private.coffee/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+  ];
+
   /// Météo (sans clé).
   static const openMeteo = 'https://api.open-meteo.com/v1/forecast';
 
