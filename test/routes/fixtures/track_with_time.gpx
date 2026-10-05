@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Garmin Connect" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+  <metadata>
+    <name>Tour du Vexin &amp; des Boucles</name>
+    <time>2026-09-20T07:58:12Z</time>
+  </metadata>
+  <wpt lat="49.1201" lon="1.8203"><ele>120</ele><name>Pause café</name></wpt>
+  <trk>
+    <name>Trace du dimanche</name>
+    <type>motorcycling</type>
+    <trkseg>
+      <trkpt lat="49.100000" lon="1.800000"><ele>100.0</ele><time>2026-09-20T08:00:00Z</time><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>90</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions></trkpt>
+      <trkpt lat="49.100500" lon="1.801000"><ele>101.5</ele><time>2026-09-20T08:00:06Z</time></trkpt>
+      <trkpt lat="49.101000" lon="1.802000"><ele>104.0</ele><time>2026-09-20T08:00:12Z</time></trkpt>
+      <trkpt lat="49.101500" lon="1.803000"><ele>110.0</ele><time>2026-09-20T08:00:18Z</time></trkpt>
+      <trkpt lat="49.102000" lon="1.804000"><ele>118.0</ele><time>2026-09-20T08:00:24Z</time></trkpt>
+    </trkseg>
+    <trkseg>
+      <trkpt lat="49.102500" lon="1.805000"><ele>121.0</ele><time>2026-09-20T08:00:30Z</time></trkpt>
+      <trkpt lat="49.103000" lon="1.806000"><ele>119.0</ele><time>2026-09-20T08:00:36Z</time></trkpt>
+      <trkpt lat="49.103500" lon="1.807000"><ele>126.0</ele><time>2026-09-20T08:00:42Z</time></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="Kurviger">
+  <rte>
+    <name>Route des Crêtes</name>
+    <desc>Les Vosges par les crêtes</desc>
+    <rtept lat="48.0627" lon="7.0273"><name>Col de la Schlucht</name></rtept>
+    <rtept lat="47.9934" lon="7.0096"></rtept>
+    <rtept lat="47.9015" lon="7.1006"><name>Grand Ballon</name></rtept>
+    <rtept lat="47.8150" lon="7.0580"></rtept>
+  </rte>
+</gpx>

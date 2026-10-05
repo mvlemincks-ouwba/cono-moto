@@ -1,0 +1,237 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "users": {
+      "$uid": {
+        "profile": {
+          ".read": "auth != null && (auth.uid === $uid || root.child('friends/' + $uid + '/' + auth.uid).exists())",
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['name', 'color', 'code'])",
+          "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24" },
+          "color": { ".validate": "newData.isNumber()" },
+          "bike": { ".validate": "newData.isString() && newData.val().length <= 40" },
+          "code": {
+            ".validate": "newData.isString() && newData.parent().parent().parent().parent().child('friendCodes/' + newData.val()).val() === $uid"
+          },
+          "createdAt": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "friendCodes": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((!data.exists() && newData.val() === auth.uid) || (data.val() === auth.uid && !newData.exists()))",
+        ".validate": "$code.length === 6 && $code.matches(/^[A-HJKMNP-Z2-9]+$/) && newData.isString()"
+      }
+    },
+
+    "friends": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$friendUid": {
+          ".write": "auth != null && $uid !== $friendUid && (auth.uid === $uid || (auth.uid === $friendUid && (!newData.exists() || newData.parent().parent().parent().child('friendProofs/' + $uid + '/' + auth.uid).exists())))",
+          ".validate": "newData.val() === true && newData.parent().parent().parent().child('users/' + $friendUid + '/profile/name').exists()"
+        }
+      }
+    },
+
+    "friendProofs": {
+      "$uid": {
+        "$from": {
+          ".write": "auth != null && auth.uid === $from && $uid !== $from",
+          ".validate": "(newData.child('code').isString() && newData.child('code').val() === root.child('users/' + $uid + '/profile/code').val()) || (newData.child('group').isString() && newData.parent().parent().parent().child('groups/' + newData.child('group').val() + '/members/' + $uid).exists() && newData.parent().parent().parent().child('groups/' + newData.child('group').val() + '/members/' + $from).exists())"
+        }
+      }
+    },
+
+    "live": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('friends/' + $uid + '/' + auth.uid).exists())",
+        ".write": "auth != null && auth.uid === $uid",
+        "lat": { ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90" },
+        "lng": { ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180" },
+        "speed": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 500" },
+        "heading": { ".validate": "newData.isNumber()" },
+        "lean": { ".validate": "newData.isNumber()" },
+        "ts": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+        "riding": { ".validate": "newData.isBoolean()" },
+        "name": { ".validate": "newData.isString() && newData.val().length <= 24" },
+        "color": { ".validate": "newData.isNumber()" },
+        "bike": { ".validate": "newData.isString() && newData.val().length <= 40" },
+        "sos": { ".validate": "newData.isBoolean()" },
+        "sosMessage": { ".validate": "newData.isString() && newData.val().length <= 500" },
+        "sosAt": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "reports": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('friends/' + $uid + '/' + auth.uid).exists())",
+        ".write": "auth != null && auth.uid === $uid",
+        "$id": {
+          ".validate": "newData.hasChildren(['type', 'lat', 'lng', 'ts', 'expiresAt'])",
+          "type": { ".validate": "newData.isString() && newData.val().length <= 30" },
+          "lat": { ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90" },
+          "lng": { ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180" },
+          "comment": { ".validate": "newData.isString() && newData.val().length <= 200" },
+          "ts": { ".validate": "newData.isNumber()" },
+          "expiresAt": { ".validate": "newData.isNumber() && newData.val() <= now + 2764800000" },
+          "authorName": { ".validate": "newData.isString() && newData.val().length <= 24" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "groups": {
+      "$gid": {
+        ".read": "auth != null && data.child('members/' + auth.uid).exists()",
+        ".write": "auth != null && ((!data.exists() && newData.child('createdBy').val() === auth.uid && newData.child('members/' + auth.uid).exists()) || (data.exists() && !newData.exists() && data.child('createdBy').val() === auth.uid))",
+        ".validate": "$gid.length >= 8 && $gid.length <= 10 && $gid.matches(/^[A-HJKMNP-Z2-9]+$/) && newData.hasChildren(['name', 'createdBy'])",
+        "name": {
+          ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()",
+          ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40"
+        },
+        "createdBy": { ".validate": "newData.isString() && (!data.exists() || data.val() === newData.val())" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "members": {
+          "$member": {
+            ".write": "auth != null && auth.uid === $member && root.child('groups/' + $gid + '/createdBy').exists()",
+            ".validate": "newData.hasChildren(['name'])",
+            "name": { ".validate": "newData.isString() && newData.val().length <= 24" },
+            "color": { ".validate": "newData.isNumber()" },
+            "joinedAt": { ".validate": "newData.isNumber()" },
+            "$other": { ".validate": false }
+          }
+        },
+        "rally": {
+          ".write": "auth != null && data.parent().child('members/' + auth.uid).exists()",
+          ".validate": "newData.hasChildren(['lat', 'lng', 'setAt'])",
+          "lat": { ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90" },
+          "lng": { ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180" },
+          "label": { ".validate": "newData.isString() && newData.val().length <= 60" },
+          "setBy": { ".validate": "newData.val() === auth.uid" },
+          "setByName": { ".validate": "newData.isString() && newData.val().length <= 24" },
+          "setAt": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        },
+        "expenses": {
+          "$eid": {
+            ".write": "auth != null && data.parent().parent().child('members/' + auth.uid).exists()",
+            ".validate": "newData.hasChildren(['amount', 'paidBy', 'participants', 'ts'])",
+            "label": { ".validate": "newData.isString() && newData.val().length <= 80" },
+            "amount": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 1000000000" },
+            "paidBy": { ".validate": "newData.isString()" },
+            "participants": {
+              "$p": { ".validate": "newData.val() === true" }
+            },
+            "category": { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "ts": { ".validate": "newData.isNumber()" },
+            "createdBy": { ".validate": "newData.isString()" },
+            "$other": { ".validate": false }
+          }
+        },
+        "settlements": {
+          "$sid": {
+            ".write": "auth != null && data.parent().parent().child('members/' + auth.uid).exists()",
+            ".validate": "newData.hasChildren(['from', 'to', 'amount', 'ts'])",
+            "from": { ".validate": "newData.isString()" },
+            "to": { ".validate": "newData.isString() && newData.val() !== newData.parent().child('from').val()" },
+            "amount": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 1000000000" },
+            "ts": { ".validate": "newData.isNumber()" },
+            "createdBy": { ".validate": "newData.isString()" },
+            "$other": { ".validate": false }
+          }
+        },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "userGroups": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$gid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.val() === true"
+        }
+      }
+    },
+
+    "shares": {
+      "$token": {
+        ".read": true,
+        ".write": "auth != null && ((!data.exists() && newData.child('uid').val() === auth.uid) || data.child('uid').val() === auth.uid)",
+        ".validate": "$token.length >= 20 && $token.length <= 64 && $token.matches(/^[A-Za-z0-9]+$/) && newData.hasChildren(['uid', 'expiresAt'])",
+        "uid": { ".validate": "newData.val() === auth.uid" },
+        "name": { ".validate": "newData.isString() && newData.val().length <= 24" },
+        "color": { ".validate": "newData.isNumber()" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "expiresAt": { ".validate": "newData.isNumber() && newData.val() <= now + 50400000" },
+        "active": { ".validate": "newData.isBoolean()" },
+        "lat": { ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90" },
+        "lng": { ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180" },
+        "speed": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 500" },
+        "heading": { ".validate": "newData.isNumber()" },
+        "riding": { ".validate": "newData.isBoolean()" },
+        "ts": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+        "trail": { ".validate": "newData.isString() && newData.val().length <= 20000" },
+        "sos": { ".validate": "newData.isBoolean()" },
+        "sosMessage": { ".validate": "newData.isString() && newData.val().length <= 500" },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "userShares": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$token": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+
+    "sharedRoutes": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('friends/' + $uid + '/' + auth.uid).exists())",
+        ".indexOn": ["sharedAt"],
+        "$routeId": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['name', 'polyline', 'sharedAt'])",
+          "name": { ".validate": "newData.isString() && newData.val().length <= 120" },
+          "polyline": { ".validate": "newData.isString() && newData.val().length <= 300000" },
+          "sharedAt": { ".validate": "newData.isNumber()" }
+        }
+      }
+    },
+
+    "sharedRides": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('friends/' + $uid + '/' + auth.uid).exists())",
+        ".indexOn": ["sharedAt"],
+        "$rideId": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['name', 'startedAt', 'sharedAt'])",
+          "name": { ".validate": "newData.isString() && newData.val().length <= 120" },
+          "startedAt": { ".validate": "newData.isNumber()" },
+          "endedAt": { ".validate": "newData.isNumber()" },
+          "distanceM": { ".validate": "newData.isNumber()" },
+          "movingTimeS": { ".validate": "newData.isNumber()" },
+          "maxSpeedKmh": { ".validate": "newData.isNumber()" },
+          "avgSpeedKmh": { ".validate": "newData.isNumber()" },
+          "maxLeanDeg": { ".validate": "newData.isNumber()" },
+          "elevationGainM": { ".validate": "newData.isNumber()" },
+          "previewPolyline": { ".validate": "newData.isString() && newData.val().length <= 20000" },
+          "authorName": { ".validate": "newData.isString() && newData.val().length <= 24" },
+          "authorColor": { ".validate": "newData.isNumber()" },
+          "sharedAt": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        }
+      }
+    }
+  }
+}

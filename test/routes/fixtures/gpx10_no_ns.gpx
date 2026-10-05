@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<gpx version="1.0" creator="OldTool">
+<name>Vieille trace</name>
+<trk><trkseg>
+<trkpt lat="45.1" lon="5.7"><ele>210</ele></trkpt>
+<trkpt lat="45.1003" lon="5.7004"><ele>212</ele></trkpt>
+<trkpt lat="45.1006" lon="5.7008"><ele>215</ele></trkpt>
+</trkseg></trk>
+</gpx>

@@ -1,0 +1,29 @@
+{
+ "features": [
+  {
+   "geometry": {
+    "coordinates": [
+     1.9516,
+     48.5291
+    ],
+    "type": "Point"
+   },
+   "type": "Feature",
+   "properties": {
+    "osm_type": "W",
+    "osm_id": 4242,
+    "country": "France",
+    "city": "Dourdan",
+    "countrycode": "FR",
+    "postcode": "91410",
+    "county": "Essonne",
+    "type": "street",
+    "osm_value": "tertiary",
+    "osm_key": "highway",
+    "name": "Route de Rochefort",
+    "state": "Île-de-France"
+   }
+  }
+ ],
+ "type": "FeatureCollection"
+}
