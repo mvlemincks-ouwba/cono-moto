@@ -131,16 +131,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       case FriendLive f:
         _showFriend(f);
       case RoadReport r:
-        _showInfo(
-          icon: r.type.icon,
-          color: r.type.color,
-          title: r.type.label,
-          lines: [
-            if (r.comment.isNotEmpty) r.comment,
-            'Signalé par ${r.authorName} ${Fmt.ago(r.createdAt)}',
-          ],
-          at: r.location,
-        );
+        showReportDetailsSheet(context, r);
       case RallyPoint rp:
         _showInfo(
           icon: Icons.flag_rounded,

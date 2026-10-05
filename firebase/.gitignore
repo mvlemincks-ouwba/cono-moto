@@ -1,0 +1,6 @@
+# Copie de ../web_share faite par deploy.sh
+web_share/
+# Fichiers locaux de la CLI Firebase
+.firebase/
+*-debug.log
+node_modules/

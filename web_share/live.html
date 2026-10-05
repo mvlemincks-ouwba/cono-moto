@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0B0D10">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Cono Moto · Suivi en direct</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230B0D10'/%3E%3Cpath d='M32 10 46 50H18z' fill='%23FF6B1A'/%3E%3Cpath d='M25 32h14l2.6 7H22.4z' fill='%23fff'/%3E%3Crect x='12' y='49' width='40' height='6' rx='3' fill='%23FF6B1A'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&family=Barlow+Condensed:wght@600;700&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <style>
+    :root {
+      --orange: #FF6B1A;
+      --orange-deep: #E5520A;
+      --green: #22C55E;
+      --red: #EF4444;
+      --amber: #FFB020;
+      --sky: #4EA8FF;
+      --bg: #0B0D10;
+      --panel: rgba(18, 21, 25, 0.86);
+      --panel-solid: #121519;
+      --line: rgba(255, 255, 255, 0.08);
+      --text: #EDEFF2;
+      --muted: #9AA3AF;
+      --rider: #2EC4B6;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+    body {
+      font-family: 'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+    #map { position: fixed; inset: 0; }
+    .num { font-family: 'Barlow Condensed', 'Barlow', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+
+    /* ---------- Panneau du haut ---------- */
+    .top {
+      position: fixed; z-index: 3;
+      top: calc(12px + env(safe-area-inset-top)); left: 12px; right: 12px;
+      max-width: 520px; margin: 0 auto;
+      background: var(--panel);
+      -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 14px 16px 14px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+    }
+    .brand {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted);
+    }
+    .brand .cone { width: 16px; height: 16px; }
+    .brand b { color: var(--orange); }
+    .brand .live-pill {
+      margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px; border-radius: 999px; background: rgba(255, 107, 26, 0.16); color: var(--orange);
+    }
+    .live-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: blink 1.4s infinite; }
+    .live-pill.off { background: rgba(154, 163, 175, 0.16); color: var(--muted); }
+    .live-pill.off .dot { animation: none; }
+    @keyframes blink { 50% { opacity: 0.25; } }
+
+    .rider { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+    .avatar {
+      flex: none; width: 48px; height: 48px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: var(--rider); color: #0B0D10;
+      font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 21px;
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
+      transition: box-shadow .3s;
+    }
+    .avatar.riding { box-shadow: 0 0 0 3px var(--panel-solid), 0 0 0 5px var(--green); }
+    .avatar.sos { box-shadow: 0 0 0 3px var(--panel-solid), 0 0 0 5px var(--red); }
+    .who { min-width: 0; flex: 1; }
+    .name { font-size: 20px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .status { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--muted); }
+    .status .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+    .status.riding { color: var(--green); }
+    .status.stopped { color: var(--sky); }
+    .status.stale { color: var(--amber); }
+    .status.ended { color: var(--muted); }
+    .status.sos { color: var(--red); }
+
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .stat { background: rgba(255, 255, 255, 0.04); border-radius: 14px; padding: 8px 12px; }
+    .stat .label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+    .stat .value { font-size: 30px; font-weight: 700; line-height: 1.05; }
+    .stat .value small { font-size: 14px; color: var(--muted); font-weight: 600; margin-left: 3px; }
+    .stat .value.text { font-size: 20px; padding-top: 6px; }
+
+    /* ---------- SOS ---------- */
+    .sos {
+      position: fixed; z-index: 4; left: 12px; right: 12px; max-width: 520px; margin: 0 auto;
+      bottom: calc(86px + env(safe-area-inset-bottom));
+      background: var(--red); color: #fff; border-radius: 18px; padding: 14px 16px;
+      box-shadow: 0 14px 34px rgba(239, 68, 68, 0.45);
+      animation: pulse 1.6s infinite;
+    }
+    .sos strong { display: block; font-size: 18px; }
+    .sos p { margin: 4px 0 0; font-size: 14px; font-weight: 600; opacity: 0.95; }
+    @keyframes pulse { 50% { box-shadow: 0 14px 44px rgba(239, 68, 68, 0.85); } }
+
+    /* ---------- Boutons du bas ---------- */
+    .actions {
+      position: fixed; z-index: 3; left: 12px; right: 12px; max-width: 520px; margin: 0 auto;
+      bottom: calc(14px + env(safe-area-inset-bottom));
+      display: flex; gap: 8px;
+    }
+    .btn {
+      flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      height: 54px; border-radius: 16px; border: 1px solid var(--line);
+      font: 700 16px 'Barlow', system-ui, sans-serif; text-decoration: none; cursor: pointer;
+      background: var(--panel); color: var(--text);
+      -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    }
+    .btn.primary { background: var(--orange); border-color: var(--orange); color: #fff; box-shadow: 0 10px 26px rgba(255, 107, 26, 0.4); }
+    .btn:active { transform: scale(0.98); }
+    .btn svg { width: 20px; height: 20px; }
+    .btn[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+
+    /* ---------- Marqueur ---------- */
+    .rider-marker { position: relative; width: 46px; height: 46px; }
+    .rider-marker .halo {
+      position: absolute; inset: -10px; border-radius: 50%;
+      background: var(--rider); opacity: 0; animation: halo 2s infinite;
+    }
+    .rider-marker.idle .halo, .rider-marker.ended .halo { display: none; }
+    @keyframes halo { 0% { transform: scale(.55); opacity: .45; } 100% { transform: scale(1.25); opacity: 0; } }
+    .rider-marker .arrow {
+      position: absolute; left: 50%; top: 50%; width: 0; height: 0;
+      transform-origin: 0 0;
+    }
+    .rider-marker .arrow::before {
+      content: ''; position: absolute; left: -9px; top: -38px;
+      border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 14px solid var(--rider);
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,.5));
+    }
+    .rider-marker .arrow.hidden { display: none; }
+    .rider-marker .disc {
+      position: absolute; inset: 0; border-radius: 50%;
+      display: grid; place-items: center;
+      background: var(--rider); color: #0B0D10; border: 3px solid #fff;
+      font: 700 18px 'Barlow Condensed', sans-serif;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+    }
+    .rider-marker.ended .disc { filter: grayscale(1); opacity: .8; }
+    .rider-marker.sos .disc { background: var(--red); color: #fff; }
+
+    /* ---------- Superposition (lien invalide, etc.) ---------- */
+    .overlay {
+      position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 24px;
+      background: radial-gradient(ellipse at top, rgba(255, 107, 26, 0.18), transparent 60%), rgba(11, 13, 16, 0.92);
+    }
+    .overlay .box { max-width: 380px; text-align: center; }
+    .overlay .icon {
+      width: 84px; height: 84px; margin: 0 auto 18px; border-radius: 50%;
+      display: grid; place-items: center; background: rgba(255, 107, 26, 0.14);
+    }
+    .overlay h1 { font: 700 32px 'Barlow Condensed', sans-serif; margin: 0 0 8px; }
+    .overlay p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.45; }
+    .banner {
+      position: fixed; z-index: 4; left: 12px; right: 12px; max-width: 520px; margin: 0 auto;
+      bottom: calc(80px + env(safe-area-inset-bottom));
+      background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+      padding: 12px 14px; font-weight: 600; color: var(--muted);
+      -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    }
+    .hidden { display: none !important; }
+
+    .maplibregl-ctrl-attrib { font-size: 10px; }
+    .maplibregl-ctrl-bottom-right { bottom: calc(76px + env(safe-area-inset-bottom)); }
+    @media (min-width: 720px) {
+      .top { left: 20px; right: auto; width: 400px; margin: 0; }
+      .actions { left: 20px; right: auto; width: 400px; margin: 0; }
+      .sos, .banner { left: 20px; right: auto; width: 400px; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="map" aria-label="Carte de suivi"></div>
+
+  <header class="top" aria-live="polite">
+    <div class="brand">
+      <svg class="cone" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 6 48 52H16z" fill="#FF6B1A"/><path d="M24 30h16l3 8H21z" fill="#fff"/><rect x="10" y="51" width="44" height="7" rx="3.5" fill="#FF6B1A"/></svg>
+      <span><b>Cono Moto</b> · suivi en direct</span>
+      <span class="live-pill off" id="livePill"><span class="dot"></span><span id="liveText">Connexion</span></span>
+    </div>
+    <div class="rider">
+      <div class="avatar" id="avatar">…</div>
+      <div class="who">
+        <div class="name" id="name">Chargement…</div>
+        <div class="status ended" id="status"><span class="dot"></span><span id="statusText">Connexion au direct…</span></div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat">
+        <div class="label">Vitesse</div>
+        <div class="value num" id="speed">–<small>km/h</small></div>
+      </div>
+      <div class="stat">
+        <div class="label">Mise à jour</div>
+        <div class="value num text" id="updated">–</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="sos hidden" id="sos" role="alert">
+    <strong id="sosTitle">SOS · chute possible</strong>
+    <p id="sosText">Essaie de l'appeler. Si personne ne répond, appelle le 112 en donnant la position affichée.</p>
+  </div>
+  <div class="banner hidden" id="banner"></div>
+
+  <nav class="actions">
+    <button class="btn primary" id="recenter" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      Recentrer
+    </button>
+    <a class="btn" id="directions" target="_blank" rel="noopener" aria-disabled="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 21 3l-8 18-2-8z"/></svg>
+      Itinéraire
+    </a>
+  </nav>
+
+  <div class="overlay hidden" id="overlay">
+    <div class="box">
+      <div class="icon">
+        <svg width="40" height="40" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 6 48 52H16z" fill="#FF6B1A"/><path d="M24 30h16l3 8H21z" fill="#fff"/><rect x="10" y="51" width="44" height="7" rx="3.5" fill="#FF6B1A"/></svg>
+      </div>
+      <h1 id="ovTitle">Lien invalide</h1>
+      <p id="ovText"></p>
+    </div>
+  </div>
+
+  <noscript><div class="overlay"><div class="box"><h1>JavaScript requis</h1><p>Active JavaScript pour suivre la balade en direct.</p></div></div></noscript>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    // ------------------------------------------------------------------
+    // Paramètres : ?db=<URL de la Realtime Database>&t=<jeton>
+    // ------------------------------------------------------------------
+    var params = new URLSearchParams(location.search);
+    var token = params.get('t') || '';
+    var db = (params.get('db') || '').trim();
+    if (db && !/^https?:\/\//i.test(db)) db = 'https://' + db;
+    db = db.replace(/\/+$/, '');
+    var dbOk = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.(firebasedatabase\.app|firebaseio\.com)$/i.test(db);
+    var tokenOk = /^[A-Za-z0-9]{20,64}$/.test(token);
+
+    var $ = function (id) { return document.getElementById(id); };
+    var STALE_MS = 2 * 60 * 1000;
+
+    function overlay(title, text) {
+      $('ovTitle').textContent = title;
+      $('ovText').textContent = text;
+      $('overlay').classList.remove('hidden');
+    }
+
+    if (!dbOk || !tokenOk) {
+      overlay('Lien incomplet', 'Ce lien de suivi est abîmé ou incomplet. Demande au motard de te le renvoyer depuis Cono Moto.');
+      return;
+    }
+    if (typeof maplibregl === 'undefined') {
+      overlay('Carte indisponible', 'La carte n\'a pas pu se charger. Vérifie ta connexion puis recharge la page.');
+      return;
+    }
+
+    // ------------------------------------------------------------------
+    // Utilitaires
+    // ------------------------------------------------------------------
+    function initials(name) {
+      var parts = (name || '').trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return '?';
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    function cssColor(argb) {
+      if (typeof argb !== 'number') return '#2EC4B6';
+      return '#' + ((argb >>> 0) & 0xFFFFFF).toString(16).padStart(6, '0');
+    }
+    function luminance(hex) {
+      var n = parseInt(hex.slice(1), 16);
+      var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+      return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    }
+    function ago(ms) {
+      if (ms < 0) ms = 0;
+      var s = Math.round(ms / 1000);
+      if (s < 10) return 'à l\'instant';
+      if (s < 60) return 'il y a ' + s + ' s';
+      var m = Math.round(s / 60);
+      if (m < 60) return 'il y a ' + m + ' min';
+      var h = Math.floor(m / 60);
+      return 'il y a ' + h + ' h' + (m % 60 ? ' ' + String(m % 60).padStart(2, '0') : '');
+    }
+    function hhmm(ms) {
+      return new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    }
+    // Distance approximative (m) entre deux [lng, lat].
+    function dist(a, b) {
+      var R = 6371008.8, toRad = Math.PI / 180;
+      var dLat = (b[1] - a[1]) * toRad, dLng = (b[0] - a[0]) * toRad;
+      var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(a[1] * toRad) * Math.cos(b[1] * toRad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+    }
+    // Polyligne encodée (format Google, précision 5) → [[lng, lat], …]
+    function decodePolyline(str) {
+      var out = [], index = 0, lat = 0, lng = 0;
+      while (index < str.length) {
+        for (var k = 0; k < 2; k++) {
+          var shift = 0, result = 0, b;
+          do {
+            b = str.charCodeAt(index++) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+          } while (b >= 0x20 && index < str.length);
+          var delta = (result & 1) ? ~(result >> 1) : (result >> 1);
+          if (k === 0) lat += delta; else lng += delta;
+        }
+        out.push([lng / 1e5, lat / 1e5]);
+      }
+      return out;
+    }
+
+    // ------------------------------------------------------------------
+    // Carte
+    // ------------------------------------------------------------------
+    var map = new maplibregl.Map({
+      container: 'map',
+      style: 'https://tiles.openfreemap.org/styles/liberty',
+      center: [2.4, 46.6],
+      zoom: 4.6,
+      attributionControl: { compact: true },
+      pitchWithRotate: false,
+    });
+    map.dragRotate.disable();
+    map.touchZoomRotate.disableRotation();
+
+    var mapReady = false;
+    var follow = true;
+    var firstFix = true;
+    var lastCentered = null;
+    var baseTrail = [];   // traînée envoyée par l'app (rechargement de page)
+    var liveTrail = [];   // points reçus depuis l'ouverture de la page
+
+    map.on('load', function () {
+      map.addSource('trail', { type: 'geojson', data: lineData() });
+      map.addLayer({
+        id: 'trail-casing', type: 'line', source: 'trail',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#101318', 'line-width': 9, 'line-opacity': 0.55 },
+      });
+      map.addLayer({
+        id: 'trail', type: 'line', source: 'trail',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#FF6B1A', 'line-width': 5 },
+      });
+      mapReady = true;
+      render();
+    });
+    // Si l'utilisateur déplace la carte, on arrête de suivre automatiquement.
+    map.on('dragstart', function () { follow = false; });
+
+    function lineData() {
+      var coords = baseTrail.concat(liveTrail);
+      return { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } };
+    }
+    function refreshTrail() {
+      if (!mapReady) return;
+      var src = map.getSource('trail');
+      if (src) src.setData(lineData());
+    }
+
+    var markerEl = document.createElement('div');
+    markerEl.className = 'rider-marker idle';
+    markerEl.innerHTML = '<div class="halo"></div><div class="arrow hidden"></div><div class="disc">?</div>';
+    var marker = new maplibregl.Marker({ element: markerEl, anchor: 'center' });
+    var markerOnMap = false;
+
+    $('recenter').addEventListener('click', function () {
+      follow = true;
+      if (state && typeof state.lat === 'number') {
+        map.easeTo({ center: [state.lng, state.lat], zoom: Math.max(map.getZoom(), 13), duration: 700 });
+      }
+    });
+
+    // ------------------------------------------------------------------
+    // Données en streaming (API REST + EventSource de la Realtime Database)
+    // ------------------------------------------------------------------
+    var state;          // undefined = pas encore reçu ; null = inexistant
+    var lastTrailStr = null;
+    var source = null;
+    var connected = false;
+
+    function setAt(path, value) {
+      var parts = path.split('/').filter(Boolean);
+      if (!parts.length) { state = value; return; }
+      if (state === null || typeof state !== 'object') state = {};
+      var node = state;
+      for (var i = 0; i < parts.length - 1; i++) {
+        if (node[parts[i]] === null || typeof node[parts[i]] !== 'object') node[parts[i]] = {};
+        node = node[parts[i]];
+      }
+      var last = parts[parts.length - 1];
+      if (value === null) delete node[last]; else node[last] = value;
+    }
+
+    function connect() {
+      source = new EventSource(db + '/shares/' + encodeURIComponent(token) + '.json');
+      source.addEventListener('put', function (e) {
+        var msg = JSON.parse(e.data);
+        setAt(msg.path, msg.data);
+        connected = true;
+        render();
+      });
+      source.addEventListener('patch', function (e) {
+        var msg = JSON.parse(e.data);
+        var data = msg.data || {};
+        Object.keys(data).forEach(function (k) {
+          setAt(msg.path.replace(/\/$/, '') + '/' + k, data[k]);
+        });
+        connected = true;
+        render();
+      });
+      source.addEventListener('cancel', function () {
+        source.close();
+        overlay('Accès refusé', 'Ce lien n\'est plus valide. Demande au motard un nouveau lien de suivi.');
+      });
+      source.addEventListener('auth_revoked', function () { source.close(); });
+      source.onopen = function () { connected = true; renderPill(); };
+      source.onerror = function () { connected = false; renderPill(); };
+    }
+
+    // ------------------------------------------------------------------
+    // Affichage
+    // ------------------------------------------------------------------
+    function isEnded() {
+      if (!state) return false;
+      return state.active === false || (typeof state.expiresAt === 'number' && Date.now() > state.expiresAt);
+    }
+
+    function renderPill() {
+      var pill = $('livePill');
+      var ended = isEnded();
+      pill.classList.toggle('off', ended || !connected);
+      $('liveText').textContent = ended ? 'Terminé' : (connected ? 'Direct' : 'Reconnexion');
+    }
+
+    function render() {
+      renderPill();
+      if (state === undefined) return;
+      if (state === null) {
+        overlay('Partage introuvable', 'Ce partage n\'existe pas ou a été supprimé. Demande au motard de t\'envoyer un nouveau lien.');
+        return;
+      }
+      $('overlay').classList.add('hidden');
+
+      var color = cssColor(state.color);
+      var ink = luminance(color) > 0.55 ? '#0B0D10' : '#FFFFFF';
+      document.documentElement.style.setProperty('--rider', color);
+      var name = state.name || 'Motard';
+      document.title = name + ' · suivi en direct · Cono Moto';
+      $('name').textContent = name;
+      $('avatar').textContent = initials(name);
+      $('avatar').style.color = ink;
+      markerEl.querySelector('.disc').textContent = initials(name);
+      markerEl.querySelector('.disc').style.color = state.sos ? '#fff' : ink;
+
+      var ended = isEnded();
+      var hasPos = typeof state.lat === 'number' && typeof state.lng === 'number';
+      var age = typeof state.ts === 'number' ? Date.now() - state.ts : Infinity;
+      var riding = state.riding === true && !ended && age < STALE_MS;
+
+      // Statut
+      var status = $('status');
+      var cls = 'ended', text;
+      if (state.sos && !ended) { cls = 'sos'; text = 'Alerte SOS en cours'; }
+      else if (ended) { text = 'Partage terminé' + (typeof state.expiresAt === 'number' ? ' à ' + hhmm(Math.min(state.expiresAt, Date.now())) : ''); }
+      else if (!hasPos) { cls = 'stale'; text = 'En attente de la première position…'; }
+      else if (age > STALE_MS) { cls = 'stale'; text = 'Signal perdu ' + ago(age) + ' (zone blanche ?)'; }
+      else if (state.riding !== true) { cls = 'stopped'; text = 'À l\'arrêt'; }
+      else {
+        cls = 'riding';
+        text = 'En balade' + (typeof state.expiresAt === 'number' ? ' · partage jusqu\'à ' + hhmm(state.expiresAt) : '');
+      }
+      status.className = 'status ' + cls;
+      $('statusText').textContent = text;
+      $('avatar').className = 'avatar' + (state.sos && !ended ? ' sos' : (riding ? ' riding' : ''));
+
+      // Chiffres
+      var speed = typeof state.speed === 'number' && riding ? Math.round(state.speed) : 0;
+      $('speed').innerHTML = (hasPos ? speed : '–') + '<small>km/h</small>';
+      $('updated').textContent = isFinite(age) ? ago(age) : '–';
+
+      // SOS
+      var sosOn = !!state.sos && !ended;
+      $('sos').classList.toggle('hidden', !sosOn);
+      if (sosOn) {
+        $('sosTitle').textContent = 'SOS · ' + name + ' a peut-être chuté';
+        $('sosText').textContent = (state.sosMessage ? state.sosMessage + ' — ' : '') +
+          'Essaie de l\'appeler. Sans réponse, appelle le 112 en donnant la position affichée.';
+      }
+
+      // Bandeau fin de partage
+      var banner = $('banner');
+      if (ended && !sosOn) {
+        banner.textContent = 'Le partage est terminé : la dernière position connue reste affichée.';
+        banner.classList.remove('hidden');
+        if (source) { source.close(); source = null; }
+      } else {
+        banner.classList.add('hidden');
+      }
+
+      // Traînée envoyée par l'app
+      if (typeof state.trail === 'string' && state.trail !== lastTrailStr) {
+        lastTrailStr = state.trail;
+        try { baseTrail = decodePolyline(state.trail); liveTrail = []; } catch (err) { baseTrail = []; }
+      }
+
+      if (!hasPos) return;
+      var pos = [state.lng, state.lat];
+      var last = liveTrail.length ? liveTrail[liveTrail.length - 1] : baseTrail[baseTrail.length - 1];
+      if (!last || dist(last, pos) > 12) liveTrail.push(pos);
+      refreshTrail();
+
+      marker.setLngLat(pos);
+      if (!markerOnMap) { marker.addTo(map); markerOnMap = true; }
+      markerEl.className = 'rider-marker ' + (sosOn ? 'sos' : (ended ? 'ended' : (riding ? 'riding' : 'idle')));
+      var arrow = markerEl.querySelector('.arrow');
+      if (typeof state.heading === 'number' && riding && speed >= 5) {
+        arrow.classList.remove('hidden');
+        arrow.style.transform = 'rotate(' + state.heading + 'deg)';
+      } else {
+        arrow.classList.add('hidden');
+      }
+
+      var dir = $('directions');
+      dir.href = 'https://www.google.com/maps/dir/?api=1&destination=' + state.lat.toFixed(6) + ',' + state.lng.toFixed(6);
+      dir.setAttribute('aria-disabled', 'false');
+
+      if (firstFix) {
+        firstFix = false;
+        lastCentered = pos;
+        map.jumpTo({ center: pos, zoom: 13 });
+      } else if (follow && !ended && (!lastCentered || dist(lastCentered, pos) > 5)) {
+        lastCentered = pos;
+        map.easeTo({ center: pos, duration: 900 });
+      }
+    }
+
+    // « mis à jour il y a… » vivant, et détection d'expiration sans nouvel évènement.
+    setInterval(function () { if (state) render(); }, 5000);
+    setInterval(function () {
+      if (!state || typeof state.ts !== 'number') return;
+      $('updated').textContent = ago(Date.now() - state.ts);
+    }, 1000);
+
+    connect();
+  })();
+  </script>
+</body>
+</html>

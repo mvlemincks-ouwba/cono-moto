@@ -9,6 +9,7 @@ import '../ride/ride_controller.dart';
 import '../ride/ride_screen.dart';
 import '../routes/routes_home_screen.dart';
 import '../social/social_home_screen.dart';
+import '../social/social_providers.dart';
 
 /// Onglet actif de la barre de navigation (modifiable depuis n'importe où).
 class HomeTabNotifier extends Notifier<int> {
@@ -60,6 +61,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final index = ref.watch(homeTabProvider);
+    // Envoi de ma position aux potes, liens de suivi, alertes SOS / décrochage.
+    ref.watch(liveSyncProvider);
     final rideActive = ref.watch(rideControllerProvider.select((s) => s.isActive));
 
     return Scaffold(

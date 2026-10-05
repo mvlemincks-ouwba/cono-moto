@@ -297,9 +297,16 @@ class Pill extends StatelessWidget {
             Icon(icon, size: 14, color: c),
             const SizedBox(width: 4),
           ],
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(color: c, fontWeight: FontWeight.w700),
+          // Largeur bornée plutôt que Flexible : la pastille peut être posée
+          // dans une Row sans contrainte de largeur.
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 220),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(color: c, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
