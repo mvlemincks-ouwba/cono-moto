@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/database.dart';
+import 'geo.dart';
 import '../data/models/garage.dart';
 import '../data/models/planned_route.dart';
 import '../data/repositories.dart';
@@ -41,3 +42,15 @@ class ActiveRouteNotifier extends Notifier<PlannedRoute?> {
 }
 
 final activeRouteProvider = NotifierProvider<ActiveRouteNotifier, PlannedRoute?>(ActiveRouteNotifier.new);
+
+/// Demande de centrage de la carte principale (ex : « voir mon pote sur la carte »).
+/// La carte consomme la demande puis la remet à null.
+class MapFocusNotifier extends Notifier<GeoPoint?> {
+  @override
+  GeoPoint? build() => null;
+
+  void focus(GeoPoint point) => state = point;
+  void consumed() => state = null;
+}
+
+final mapFocusProvider = NotifierProvider<MapFocusNotifier, GeoPoint?>(MapFocusNotifier.new);
