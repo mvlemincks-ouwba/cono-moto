@@ -287,21 +287,21 @@ void main() {
       final fake = FakeValhalla();
       final overpass = OverpassClient(
         client: MockClient((req) async {
-          // Une forêt autour de chaque centre demandé.
+          // Une grille de forêts couvrant la zone demandée ([bbox:s,w,n,e]).
           final q = req.bodyFields['data']!;
-          final centers = RegExp(r'around:\d+,([\d.]+),([\d.]+)\);\n  nwr\["natural"')
-              .allMatches(q)
-              .map((m) => GeoPoint(double.parse(m.group(1)!), double.parse(m.group(2)!)))
-              .toList();
+          final m = RegExp(r'\[bbox:([\d.\-]+),([\d.\-]+),([\d.\-]+),([\d.\-]+)\]').firstMatch(q)!;
+          final s = double.parse(m.group(1)!), w = double.parse(m.group(2)!);
+          final n = double.parse(m.group(3)!), e = double.parse(m.group(4)!);
           var i = 0;
           final elements = [
-            for (final c in centers)
-              {
-                'type': 'way',
-                'id': ++i,
-                'center': {'lat': c.lat + 0.005, 'lon': c.lng},
-                'tags': {'landuse': 'forest', 'name': 'Forêt de F$i'},
-              },
+            for (var y = 0; y < 12; y++)
+              for (var x = 0; x < 12; x++)
+                {
+                  'type': 'way',
+                  'id': ++i,
+                  'center': {'lat': s + (n - s) * (y + 0.5) / 12, 'lon': w + (e - w) * (x + 0.5) / 12},
+                  'tags': {'landuse': 'forest', 'name': 'Forêt de F$i'},
+                },
           ];
           return http.Response.bytes(utf8.encode(jsonEncode({'elements': elements})), 200);
         }),

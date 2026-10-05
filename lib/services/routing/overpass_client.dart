@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../../core/config.dart';
 import '../../core/geo.dart';
 import 'http_support.dart';
+import 'photon_pois.dart';
 
 /// Nature d'un point d'intérêt de balade.
 enum PoiKind { forest, pass }
@@ -51,38 +52,94 @@ class RoutePoi {
 }
 
 /// Client Overpass (OpenStreetMap) : forêts nommées et cols routiers.
+///
+/// Le serveur public principal est très sollicité (délais dépassés, 429 pour
+/// les adresses IP partagées des réseaux mobiles) : on essaie plusieurs
+/// serveurs miroirs, puis en dernier recours la recherche de lieux Photon.
 class OverpassClient {
   OverpassClient({
     http.Client? client,
-    this.endpoint = Endpoints.overpass,
+    List<String>? endpoints,
+    String? endpoint,
     RateLimiter? limiter,
-    this.timeout = const Duration(seconds: 40),
+    this.timeout = const Duration(seconds: 25),
+    PhotonPoiClient? fallback,
+    bool usePhotonFallback = true,
   }) : _client = client ?? http.Client(),
        _ownsClient = client == null,
-       _limiter = limiter ?? RateLimiter.overpass;
+       _limiter = limiter ?? RateLimiter.overpass,
+       endpoints = endpoints ?? (endpoint != null ? [endpoint] : Endpoints.overpassMirrors),
+       _fallback = usePhotonFallback ? (fallback ?? PhotonPoiClient(client: client)) : null;
 
   final http.Client _client;
   final bool _ownsClient;
   final RateLimiter _limiter;
-  final String endpoint;
+
+  /// Serveurs essayés dans l'ordre.
+  final List<String> endpoints;
   final Duration timeout;
+  final PhotonPoiClient? _fallback;
 
   static const service = 'le serveur OpenStreetMap (Overpass)';
 
-  /// Forêts nommées autour de chaque point de [centers] (rayon [radiusM]).
+  /// Forêts nommées à moins de [radiusM] d'un des points de [centers].
   Future<List<RoutePoi>> forestsAround(List<GeoPoint> centers, double radiusM) async {
     if (centers.isEmpty) return const [];
-    final json = await _run(forestQuery(centers, radiusM));
-    return parseForests(json);
+    final bounds = GeoBounds.fromPoints(centers)!.expand(radiusM);
+    List<RoutePoi> pois;
+    try {
+      pois = parseForests(await _run(forestQuery(centers, radiusM)));
+    } on RoutingException catch (e) {
+      final fb = _fallback;
+      if (fb == null || !_canFallBack(e)) rethrow;
+      pois = await _viaFallback(() => fb.forests(bounds), e);
+    }
+    return [
+      for (final p in pois)
+        if (centers.any((c) => Geo.distance(c, p.point) <= radiusM)) p,
+    ];
   }
 
   /// Cols (mountain_pass=yes) situés sur une route carrossable dans [bounds].
   Future<List<RoutePoi>> mountainPasses(GeoBounds bounds) async {
-    final json = await _run(passQuery(bounds));
-    return parsePasses(json);
+    try {
+      return parsePasses(await _run(passQuery(bounds)));
+    } on RoutingException catch (e) {
+      final fb = _fallback;
+      if (fb == null || !_canFallBack(e)) rethrow;
+      return _viaFallback(() => fb.passes(bounds), e);
+    }
   }
 
+  /// Le repli n'a de sens que si Overpass est en cause (pas sans réseau).
+  static bool _canFallBack(RoutingException e) =>
+      e.kind != RoutingErrorKind.offline && e.kind != RoutingErrorKind.cancelled;
+
+  Future<List<RoutePoi>> _viaFallback(Future<List<RoutePoi>> Function() run, RoutingException overpassError) async {
+    try {
+      return await run();
+    } on RoutingException {
+      // On remonte l'erreur Overpass d'origine, plus parlante.
+      throw overpassError;
+    }
+  }
+
+  /// Exécute la requête sur chaque serveur jusqu'à obtenir une réponse.
   Future<dynamic> _run(String query) async {
+    RoutingException? last;
+    for (final endpoint in endpoints) {
+      try {
+        return await _runOn(endpoint, query);
+      } on RoutingException catch (e) {
+        // Sans réseau, inutile d'essayer les autres serveurs.
+        if (e.kind == RoutingErrorKind.offline || e.kind == RoutingErrorKind.invalidRequest) rethrow;
+        last = e;
+      }
+    }
+    throw last ?? const RoutingException(RoutingErrorKind.server, 'Aucun serveur OpenStreetMap disponible.');
+  }
+
+  Future<dynamic> _runOn(String endpoint, String query) async {
     await _limiter.acquire();
     final response = await guardedSend(
       () => _client.post(Uri.parse(endpoint), headers: serviceHeaders(formBody: true), body: {'data': query}),
@@ -107,22 +164,25 @@ class OverpassClient {
 
   static String _f(double v) => v.toStringAsFixed(5);
 
-  static String forestQuery(List<GeoPoint> centers, double radiusM) {
-    final r = radiusM.round();
-    final sb = StringBuffer('[out:json][timeout:30];\n(\n');
-    for (final c in centers) {
-      final at = '(around:$r,${_f(c.lat)},${_f(c.lng)})';
-      sb.writeln('  nwr["landuse"="forest"]["name"]$at;');
-      sb.writeln('  nwr["natural"="wood"]["name"]$at;');
-    }
-    sb.writeln(');');
-    sb.write('out center tags;');
-    return sb.toString();
+  /// Forêts et bois nommés dans le rectangle englobant les cercles demandés.
+  /// Une seule zone (plutôt qu'un filtre « around » par point, très coûteux en
+  /// région boisée comme les Landes), surfaces uniquement, nombre plafonné.
+  static String forestQuery(List<GeoPoint> centers, double radiusM, {int limit = 200}) {
+    final b = GeoBounds.fromPoints(centers)!.expand(radiusM);
+    final bbox = '${_f(b.south)},${_f(b.west)},${_f(b.north)},${_f(b.east)}';
+    return '[out:json][timeout:20][bbox:$bbox];\n'
+        '(\n'
+        '  way["landuse"="forest"]["name"];\n'
+        '  relation["landuse"="forest"]["name"];\n'
+        '  way["natural"="wood"]["name"];\n'
+        '  relation["natural"="wood"]["name"];\n'
+        ');\n'
+        'out tags center $limit;';
   }
 
   static String passQuery(GeoBounds b) {
     final bbox = '${_f(b.south)},${_f(b.west)},${_f(b.north)},${_f(b.east)}';
-    return '[out:json][timeout:30];\n'
+    return '[out:json][timeout:20];\n'
         'node["mountain_pass"="yes"]["name"]($bbox)->.passes;\n'
         'way(bn.passes)["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential)(_link)?\$"]->.roads;\n'
         'node.passes(w.roads);\n'
@@ -194,6 +254,7 @@ class OverpassClient {
   }
 
   void close() {
+    _fallback?.close();
     if (_ownsClient) _client.close();
   }
 }
