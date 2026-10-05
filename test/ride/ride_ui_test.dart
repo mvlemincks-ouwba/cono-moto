@@ -4,6 +4,8 @@ import 'package:cono_moto/core/settings.dart';
 import 'package:cono_moto/core/theme.dart';
 import 'package:cono_moto/data/models/ride.dart';
 import 'package:cono_moto/features/garage/autonomy.dart';
+import 'package:cono_moto/features/navigation/navigation_providers.dart';
+import 'package:cono_moto/features/navigation/navigation_view.dart';
 import 'package:cono_moto/features/ride/crash_alert_controller.dart';
 import 'package:cono_moto/features/ride/crash_alert_screen.dart';
 import 'package:cono_moto/features/ride/ride_controller.dart';
@@ -58,8 +60,18 @@ final _activeState = RideSessionState(
   track: const [GeoPoint(45, 5), GeoPoint(45.01, 5.01)],
 );
 
-Future<void> _pumpApp(WidgetTester tester, Widget child, {required Size size, List overrides = const []}) async {
-  SharedPreferences.setMockInitialValues({'settings.emergencyName': 'Julie', 'settings.emergencyPhone': '0611'});
+Future<void> _pumpApp(
+  WidgetTester tester,
+  Widget child, {
+  required Size size,
+  List overrides = const [],
+  Map<String, Object> initialPrefs = const {},
+}) async {
+  SharedPreferences.setMockInitialValues({
+    'settings.emergencyName': 'Julie',
+    'settings.emergencyPhone': '0611',
+    ...initialPrefs,
+  });
   final prefs = await SharedPreferences.getInstance();
   tester.view.physicalSize = size * 3;
   tester.view.devicePixelRatio = 3;
@@ -81,6 +93,7 @@ Future<void> _pumpApp(WidgetTester tester, Widget child, {required Size size, Li
 void main() {
   setUpAll(() async {
     GoogleFonts.config.allowRuntimeFetching = false;
+    debugDisableNavigationMaps = true;
     await initTestLocale();
   });
 
@@ -97,11 +110,31 @@ void main() {
       await tester.dragUntilVisible(find.textContaining('Julie'), find.byType(ListView), const Offset(0, -120));
     });
 
+    testWidgets('HUD navigation par défaut en balade · ${entry.key}', (tester) async {
+      await _pumpApp(
+        tester,
+        const RideScreen(),
+        size: entry.value,
+        overrides: [
+          rideControllerProvider.overrideWith(() => _FixedRideController(_activeState)),
+          autonomyProvider.overrideWithValue(
+            const AutonomyInfo(remainingKm: 38, remainingLiters: 2, fillRatio: 0.13, low: true),
+          ),
+        ],
+      );
+      expect(find.byType(NavigationView), findsOneWidget);
+      expect(find.text('87'), findsOneWidget);
+      expect(find.text('encore ~38 km'), findsOneWidget);
+      expect(find.text('Signaler'), findsOneWidget);
+      expect(find.byTooltip('Vue compteur'), findsOneWidget);
+    });
+
     testWidgets('HUD compteur en balade · ${entry.key}', (tester) async {
       await _pumpApp(
         tester,
         const RideScreen(),
         size: entry.value,
+        initialPrefs: {'settings.rideMapFirst': false},
         overrides: [
           rideControllerProvider.overrideWith(() => _FixedRideController(_activeState)),
           autonomyProvider.overrideWithValue(

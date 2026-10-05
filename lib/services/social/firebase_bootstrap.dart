@@ -17,16 +17,24 @@ class FirebaseBootstrap {
   static Object? get error => _error;
 
   /// Options construites depuis les `--dart-define` (null si incomplètes).
-  static FirebaseOptions? get options {
-    if (!AppConfig.firebaseConfigured) return null;
+  static FirebaseOptions? get options => optionsFor(defaultTargetPlatform);
+
+  /// Options pour une plateforme : l'App ID diffère entre Android et iOS, et
+  /// iOS exige en plus le bundle id.
+  @visibleForTesting
+  static FirebaseOptions? optionsFor(TargetPlatform platform) {
+    if (!AppConfig.firebaseConfiguredFor(platform)) return null;
+    final ios = platform == TargetPlatform.iOS;
     return FirebaseOptions(
       apiKey: AppConfig.firebaseApiKey,
-      appId: AppConfig.firebaseAppId,
+      appId: AppConfig.firebaseAppIdFor(platform),
       messagingSenderId: AppConfig.firebaseMessagingSenderId,
       projectId: AppConfig.firebaseProjectId,
       databaseURL: AppConfig.firebaseDatabaseUrl,
       storageBucket: AppConfig.firebaseStorageBucket.isEmpty ? null : AppConfig.firebaseStorageBucket,
       authDomain: '${AppConfig.firebaseProjectId}.firebaseapp.com',
+      iosBundleId: ios ? AppConfig.iosBundleId : null,
+      iosClientId: ios && AppConfig.firebaseIosClientId.isNotEmpty ? AppConfig.firebaseIosClientId : null,
     );
   }
 }

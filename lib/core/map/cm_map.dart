@@ -69,6 +69,44 @@ class CmMapController {
 
   Future<double?> zoom() async => (await _c?.queryCameraPosition())?.zoom;
 
+  /// Marges de contenu : décale le point focal de la carte (ex : marge haute
+  /// pour placer le motard dans le tiers bas de l'écran, façon GPS).
+  ///
+  /// Attention : sur Android, un changement de marges interrompt le suivi
+  /// natif de la position ([FollowMode]) ; à utiliser avec [followCamera].
+  Future<void> setContentInsets(EdgeInsets insets, {bool animated = false}) async {
+    final c = _c;
+    if (c == null) return;
+    _state._appliedInsets = insets;
+    await c.updateContentInsets(insets, animated);
+  }
+
+  /// Caméra pilotée « à la main » (navigation) : glisse en ligne droite vers
+  /// [target] avec le zoom, le cap et l'inclinaison voulus. Les marges de
+  /// contenu en place sont conservées.
+  Future<void> followCamera({
+    required GeoPoint target,
+    required double zoom,
+    double bearing = 0,
+    double tilt = 0,
+    Duration duration = const Duration(milliseconds: 900),
+  }) async {
+    final c = _c;
+    if (c == null) return;
+    await c.easeCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: LatLng(target.lat, target.lng),
+          zoom: zoom,
+          bearing: bearing,
+          tilt: tilt.clamp(0, 60).toDouble(),
+        ),
+      ),
+      duration: duration,
+      interpolation: CameraAnimationInterpolation.linear,
+    );
+  }
+
   /// Accès bas niveau (téléchargement hors-ligne, couches spécifiques).
   MapLibreMapController? get raw => _c;
 }
@@ -94,6 +132,8 @@ class CmMap extends ConsumerStatefulWidget {
     this.tilt = 0,
     this.compassEnabled = true,
     this.attributionMargin,
+    this.contentInsets,
+    this.onUserGesture,
   });
 
   final List<MapLine> lines;
@@ -116,6 +156,14 @@ class CmMap extends ConsumerStatefulWidget {
   final double tilt;
   final bool compassEnabled;
   final Point<double>? attributionMargin;
+
+  /// Marges de contenu appliquées dès que la carte est prête (null = aucune).
+  /// Voir [CmMapController.setContentInsets].
+  final EdgeInsets? contentInsets;
+
+  /// Appelé quand l'utilisateur fait glisser ou pince la carte (un simple
+  /// appui ne compte pas). Utile pour suspendre une caméra pilotée.
+  final VoidCallback? onUserGesture;
 
   /// Centre par défaut : France.
   static const defaultCenter = GeoPoint(46.6, 2.4);
@@ -140,6 +188,9 @@ class _CmMapState extends ConsumerState<CmMap> {
   final Set<String> _addedImages = {};
   Future<void> _queue = Future.value();
   bool _syncScheduled = false;
+  EdgeInsets? _appliedInsets;
+  final Map<int, Offset> _pointers = {};
+  bool _gestureReported = false;
 
   @override
   void initState() {
@@ -168,6 +219,17 @@ class _CmMapState extends ConsumerState<CmMap> {
     if (oldWidget.followMode != widget.followMode) {
       _applyTracking(widget.followMode);
     }
+    if (widget.contentInsets != null && widget.contentInsets != oldWidget.contentInsets) {
+      _applyInsets();
+    }
+  }
+
+  void _applyInsets() {
+    final insets = widget.contentInsets;
+    final c = _controller;
+    if (insets == null || c == null || insets == _appliedInsets) return;
+    _appliedInsets = insets;
+    _enqueue(() => c.updateContentInsets(insets));
   }
 
   void _enqueue(Future<void> Function() task) {
@@ -255,6 +317,11 @@ class _CmMapState extends ConsumerState<CmMap> {
       );
       _styleReady = true;
       await _sync();
+      final insets = widget.contentInsets;
+      if (insets != null) {
+        _appliedInsets = insets;
+        await c.updateContentInsets(insets);
+      }
       await _applyTracking(widget.followMode);
     });
   }
@@ -334,7 +401,13 @@ class _CmMapState extends ConsumerState<CmMap> {
     try {
       await c.updateMyLocationTrackingMode(tracking);
       if (mode == FollowMode.heading && widget.tilt > 0) {
-        await c.animateCamera(CameraUpdate.tiltTo(widget.tilt));
+        // animateCamera interrompt le suivi sur Android : on incline via le
+        // composant de localisation, et seulement en repli via la caméra.
+        try {
+          await c.setTrackingCameraOptions(tilt: widget.tilt.clamp(0, 60).toDouble());
+        } catch (_) {
+          await c.animateCamera(CameraUpdate.tiltTo(widget.tilt));
+        }
       }
     } catch (e) {
       debugPrint('Suivi position : $e');
@@ -365,6 +438,27 @@ class _CmMapState extends ConsumerState<CmMap> {
     super.dispose();
   }
 
+  // Détection d'un geste de l'utilisateur (glisser / pincer) sans gêner la carte.
+  void _onPointerDown(PointerDownEvent e) {
+    if (_pointers.isEmpty) _gestureReported = false;
+    _pointers[e.pointer] = e.position;
+    if (_pointers.length >= 2) _reportGesture();
+  }
+
+  void _onPointerMove(PointerMoveEvent e) {
+    final start = _pointers[e.pointer];
+    if (start == null) return;
+    if ((e.position - start).distance > 18) _reportGesture();
+  }
+
+  void _onPointerUp(PointerEvent e) => _pointers.remove(e.pointer);
+
+  void _reportGesture() {
+    if (_gestureReported) return;
+    _gestureReported = true;
+    widget.onUserGesture?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final mapStyle = ref.watch(settingsProvider.select((s) => s.mapStyle));
@@ -373,7 +467,7 @@ class _CmMapState extends ConsumerState<CmMap> {
     final zoom = widget.initialCenter == null && ref.read(positionHubProvider) == null ? 5.2 : widget.initialZoom;
     final showLoc = widget.showUserLocation && _locationGranted;
 
-    return MapLibreMap(
+    final map = MapLibreMap(
       styleString: styleUrl,
       initialCameraPosition: CameraPosition(target: LatLng(center.lat, center.lng), zoom: zoom),
       onMapCreated: (c) {
@@ -400,6 +494,15 @@ class _CmMapState extends ConsumerState<CmMap> {
       attributionButtonPosition: AttributionButtonPosition.bottomLeft,
       attributionButtonMargins: widget.attributionMargin ?? const Point(8, 8),
       trackCameraPosition: false,
+    );
+    if (widget.onUserGesture == null) return map;
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _onPointerDown,
+      onPointerMove: _onPointerMove,
+      onPointerUp: _onPointerUp,
+      onPointerCancel: _onPointerUp,
+      child: map,
     );
   }
 }

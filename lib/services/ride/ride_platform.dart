@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 import '../../core/location.dart';
@@ -29,7 +28,8 @@ abstract class RidePlatform {
 
   Future<LocationAccess> ensureLocationPermission();
 
-  /// Flux GPS haute fréquence (service au premier plan).
+  /// Flux GPS haute fréquence (service au premier plan sur Android, suivi en
+  /// arrière-plan autorisé sur iPhone).
   Stream<RiderPosition> positions();
 
   /// Gyroscope ≈ 50 Hz (rad/s). Peut émettre une erreur si absent.
@@ -40,8 +40,14 @@ abstract class RidePlatform {
 
   Future<void> requestNotificationPermission();
 
-  /// Demande la permission d'envoyer des SMS. Retourne true si accordée.
+  /// Demande la permission d'envoyer des SMS. Retourne true si accordée
+  /// (toujours false sur iPhone : pas d'envoi automatique possible).
   Future<bool> requestSmsPermission();
+
+  /// Le téléphone envoie-t-il un SMS tout seul ? Oui sur Android ; sur iPhone,
+  /// Apple l'interdit : le SMS est préparé ([composeSms]) et il faut appuyer
+  /// sur Envoyer.
+  bool get canSendSmsAutomatically;
 
   Future<void> keepScreenOn(bool on);
 
@@ -61,10 +67,15 @@ abstract class RidePlatform {
 
   Future<void> vibrate();
 
+  /// Envoi automatique (Android). Retourne false en cas d'échec.
   Future<bool> sendSms(String phone, String message);
+
+  /// Ouvre l'écran Messages pré-rempli (iPhone) : l'utilisateur doit appuyer
+  /// sur Envoyer.
+  Future<SmsComposeResult> composeSms(String phone, String message);
 }
 
-/// Implémentation Android réelle.
+/// Implémentation réelle (Android et iPhone).
 class DeviceRidePlatform implements RidePlatform {
   DeviceRidePlatform(this._location);
 
@@ -78,7 +89,7 @@ class DeviceRidePlatform implements RidePlatform {
   DateTime now() => DateTime.now();
 
   @override
-  Future<LocationAccess> ensureLocationPermission() => _location.ensurePermission();
+  Future<LocationAccess> ensureLocationPermission() => _location.ensurePermission(precise: true);
 
   @override
   Stream<RiderPosition> positions() => _location.rideStream().map(RiderPosition.fromGeolocator);
@@ -101,15 +112,10 @@ class DeviceRidePlatform implements RidePlatform {
   }
 
   @override
-  Future<bool> requestSmsPermission() async {
-    try {
-      final status = await Permission.sms.request();
-      return status.isGranted;
-    } catch (e) {
-      debugPrint('Permission SMS : $e');
-      return false;
-    }
-  }
+  Future<bool> requestSmsPermission() => NativeBridge.requestSmsPermission();
+
+  @override
+  bool get canSendSmsAutomatically => NativeBridge.canSendSmsAutomatically;
 
   @override
   Future<void> keepScreenOn(bool on) => NativeBridge.keepScreenOn(on);
@@ -131,6 +137,8 @@ class DeviceRidePlatform implements RidePlatform {
       await tts.setLanguage('fr-FR');
       await tts.setSpeechRate(0.5);
       await tts.setVolume(1);
+      // Sur iPhone, la session audio (lecture, baisse de la musique, écran
+      // verrouillé) est configurée une fois pour toutes dans AppDelegate.swift.
     }());
     return tts;
   }
@@ -162,6 +170,9 @@ class DeviceRidePlatform implements RidePlatform {
 
   @override
   Future<bool> sendSms(String phone, String message) => NativeBridge.sendSms(phone, message);
+
+  @override
+  Future<SmsComposeResult> composeSms(String phone, String message) => NativeBridge.composeSms(phone, message);
 }
 
 final ridePlatformProvider = Provider<RidePlatform>((ref) => DeviceRidePlatform(ref.watch(locationServiceProvider)));

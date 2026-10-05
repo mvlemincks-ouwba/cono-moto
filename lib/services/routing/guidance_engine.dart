@@ -16,6 +16,7 @@ class GuidanceSnapshot {
     this.nextIndex = -1,
     this.distanceToNextM,
     this.following,
+    this.then,
     this.snapped,
     this.announcement,
   });
@@ -34,8 +35,12 @@ class GuidanceSnapshot {
   final int nextIndex;
   final double? distanceToNextM;
 
-  /// Manœuvre suivante (« puis… »).
+  /// Manœuvre qui suit la prochaine dans la liste (brute).
   final Maneuver? following;
+
+  /// Manœuvre à afficher en « puis … » : rapprochée de la prochaine et utile
+  /// (ni sortie de rond-point déjà annoncée, ni simple « continue »). Null sinon.
+  final Maneuver? then;
 
   /// Position projetée sur l'itinéraire.
   final GeoPoint? snapped;
@@ -58,7 +63,9 @@ class GuidanceEngine {
     this.nearAnnounceM = 100,
     this.arrivalRadiusM = 40,
     this.maxAccuracyM = 50,
-  }) : _points = route.points,
+    this.rerouted = false,
+  }) : _departAnnounced = rerouted,
+       _points = route.points,
        _cum = Geo.cumulativeDistances(route.points),
        _maneuvers = [...route.maneuvers]..sort((a, b) => a.distanceAlongM.compareTo(b.distanceAlongM));
 
@@ -73,6 +80,9 @@ class GuidanceEngine {
   /// Les positions moins précises ne comptent pas pour le hors-itinéraire.
   final double maxAccuracyM;
 
+  /// Itinéraire recalculé en cours de route : pas de « C'est parti ! ».
+  final bool rerouted;
+
   final List<GeoPoint> _points;
   final List<double> _cum;
   final List<Maneuver> _maneuvers;
@@ -81,7 +91,7 @@ class GuidanceEngine {
   int _offCount = 0;
   bool _offRoute = false;
   bool _arrived = false;
-  bool _departAnnounced = false;
+  bool _departAnnounced;
   final Set<String> _announced = {};
 
   GuidanceSnapshot? _last;
@@ -154,6 +164,7 @@ class GuidanceEngine {
     }
     final next = nextIndex >= 0 ? _maneuvers[nextIndex] : null;
     final following = nextIndex >= 0 && nextIndex + 1 < _maneuvers.length ? _maneuvers[nextIndex + 1] : null;
+    final then = thenManeuver(_maneuvers, nextIndex);
     final distToNext = next == null ? null : next.distanceAlongM - progress;
 
     // Annonces vocales.
@@ -181,6 +192,7 @@ class GuidanceEngine {
       nextIndex: nextIndex,
       distanceToNextM: distToNext,
       following: following,
+      then: then,
       snapped: proj.point,
       announcement: announcement,
     );
@@ -210,6 +222,24 @@ class GuidanceEngine {
       // Manœuvre rapprochée : pas d'annonce lointaine juste après la précédente.
       if (gap < near + 80) return null;
       if (_announced.add(keyFar)) return 'Dans ${spokenDistance(dist)}, $sentence';
+    }
+    return null;
+  }
+
+  /// Manœuvre « puis … » après [maneuvers][nextIndex] (liste triée) : la
+  /// première manœuvre utile qui suit, si elle arrive à moins de [maxGapM].
+  /// La sortie d'un rond-point (annoncée avec l'entrée) et les simples
+  /// « continue » sont sautées.
+  static Maneuver? thenManeuver(List<Maneuver> maneuvers, int nextIndex, {double maxGapM = 400}) {
+    if (nextIndex < 0 || nextIndex >= maneuvers.length) return null;
+    final next = maneuvers[nextIndex];
+    if (next.type == ManeuverKind.arrive) return null;
+    for (var i = nextIndex + 1; i < maneuvers.length; i++) {
+      final m = maneuvers[i];
+      if (m.distanceAlongM - next.distanceAlongM > maxGapM) return null;
+      if (m.type == ManeuverKind.roundaboutExit || m.type == ManeuverKind.depart) continue;
+      if (ManeuverKind.isPassive(m.type)) continue;
+      return m;
     }
     return null;
   }

@@ -31,6 +31,14 @@ class Notifications {
       await _plugin.initialize(
         settings: const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          // iPhone : pas de demande au lancement (l'accueil la fait au bon
+          // moment, voir [requestPermission]) ; notifications affichées même
+          // app ouverte.
+          iOS: DarwinInitializationSettings(
+            requestAlertPermission: false,
+            requestBadgePermission: false,
+            requestSoundPermission: false,
+          ),
         ),
       );
       _ready = true;
@@ -41,9 +49,19 @@ class Notifications {
 
   static Future<void> requestPermission() async {
     await init();
-    await _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+    if (!_ready) return;
+    try {
+      await _plugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
+      // Alertes critiques (qui passent outre le mode silencieux) non demandées :
+      // elles exigent un droit spécial d'Apple.
+      await _plugin
+          .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
+    } catch (e) {
+      debugPrint('Permission notifications : $e');
+    }
   }
 
   static Future<void> show({
@@ -71,6 +89,14 @@ class Notifications {
             color: const Color(0xFFFF6B1A),
             category: channel == CmChannel.safety ? AndroidNotificationCategory.alarm : null,
             fullScreenIntent: channel == CmChannel.safety,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBanner: true,
+            presentList: true,
+            presentSound: true,
+            // Regroupe les notifications par thème dans le centre de notifications.
+            threadIdentifier: channel.id,
           ),
         ),
       );

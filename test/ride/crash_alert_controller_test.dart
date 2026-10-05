@@ -1,4 +1,5 @@
 import 'package:cono_moto/core/geo.dart';
+import 'package:cono_moto/core/native.dart';
 import 'package:cono_moto/core/notifications.dart';
 import 'package:cono_moto/core/settings.dart';
 import 'package:cono_moto/features/ride/crash_alert_controller.dart';
@@ -21,13 +22,16 @@ class FakeSos implements SosBroadcaster {
   Future<void> cancel() async => cancels++;
 }
 
-Future<({ProviderContainer c, FakeRidePlatform platform, FakeSos sos})> setup({bool contact = true}) async {
+Future<({ProviderContainer c, FakeRidePlatform platform, FakeSos sos})> setup({
+  bool contact = true,
+  bool iphone = false,
+}) async {
   SharedPreferences.setMockInitialValues({
     if (contact) 'settings.emergencyName': 'Julie',
     if (contact) 'settings.emergencyPhone': '0611223344',
   });
   final prefs = await SharedPreferences.getInstance();
-  final platform = FakeRidePlatform();
+  final platform = FakeRidePlatform()..smsAutomatic = !iphone;
   final sos = FakeSos();
   final c = ProviderContainer(
     overrides: [
@@ -124,5 +128,98 @@ void main() {
     expect(s.sos.cancels, 0);
     expect(s.c.read(crashAlertProvider).phase, CrashAlertPhase.idle);
     s.c.dispose();
+  });
+
+  group('iPhone (pas de SMS automatique)', () {
+    test('expiration : potes alertés, SMS préparé mais pas envoyé tout seul', () async {
+      final s = await setup(iphone: true);
+      final ctrl = s.c.read(crashAlertProvider.notifier);
+      ctrl.trigger(at: here, accuracyM: 6, seconds: 1);
+      expect(s.platform.spoken.first, allOf(contains('Julie'), contains('SMS')));
+      await waitFor(() => s.c.read(crashAlertProvider).phase == CrashAlertPhase.sent);
+      final st = s.c.read(crashAlertProvider);
+      expect(st.smsAutomatic, isFalse);
+      expect(s.platform.sms, isEmpty, reason: 'Apple interdit l\'envoi automatique');
+      expect(st.smsSent, isNull);
+      expect(st.smsAwaitingUser, isTrue);
+      expect(st.sosSent, isTrue);
+      expect(s.sos.broadcasts.single.at, here);
+      final notif = s.platform.notifications.single;
+      expect(notif.channel, CmChannel.safety);
+      expect(notif.title, contains('Julie'));
+      expect(notif.body, contains('Envoyer'));
+      expect(s.platform.spoken.last, contains('appuie sur Envoyer'));
+      s.c.dispose();
+    });
+
+    test('« Envoyer le SMS » : Messages pré-rempli, puis envoyé par l\'utilisateur', () async {
+      final s = await setup(iphone: true);
+      final ctrl = s.c.read(crashAlertProvider.notifier);
+      ctrl.trigger(at: here, seconds: 1);
+      await waitFor(() => s.c.read(crashAlertProvider).phase == CrashAlertPhase.sent);
+      final r = await ctrl.composeSms();
+      expect(r, SmsComposeResult.sent);
+      expect(s.platform.composed.single.phone, '0611223344');
+      expect(s.platform.composed.single.message, contains('https://maps.google.com/?q=45.18765,5.72543'));
+      final st = s.c.read(crashAlertProvider);
+      expect(st.smsSent, isTrue);
+      expect(st.smsAwaitingUser, isFalse);
+      expect(s.platform.cancelled, contains(CrashAlertController.notificationId));
+      s.c.dispose();
+    });
+
+    test('Messages fermé sans envoyer : le SMS reste à envoyer', () async {
+      final s = await setup(iphone: true);
+      s.platform.composeResult = SmsComposeResult.cancelled;
+      final ctrl = s.c.read(crashAlertProvider.notifier);
+      ctrl.trigger(at: here, seconds: 1);
+      await waitFor(() => s.c.read(crashAlertProvider).phase == CrashAlertPhase.sent);
+      await ctrl.composeSms();
+      final st = s.c.read(crashAlertProvider);
+      expect(st.smsCompose, SmsComposeResult.cancelled);
+      expect(st.smsSent, isNull);
+      expect(st.smsAwaitingUser, isTrue);
+      s.c.dispose();
+    });
+
+    test('fausse alerte après SMS envoyé : SMS « fausse alerte » préparé, pas envoyé tout seul', () async {
+      final s = await setup(iphone: true);
+      final ctrl = s.c.read(crashAlertProvider.notifier);
+      ctrl.trigger(at: here, seconds: 1);
+      await waitFor(() => s.c.read(crashAlertProvider).phase == CrashAlertPhase.sent);
+      await ctrl.composeSms();
+      await ctrl.cancelAlert();
+      await Future<void>.delayed(Duration.zero);
+      expect(s.sos.cancels, 1);
+      expect(s.platform.sms, isEmpty);
+      expect(s.platform.composed.last.message, contains('fausse alerte'));
+      expect(s.c.read(crashAlertProvider).phase, CrashAlertPhase.idle);
+      s.c.dispose();
+    });
+
+    test('mode test : rien n\'est préparé ni envoyé', () async {
+      final s = await setup(iphone: true);
+      final ctrl = s.c.read(crashAlertProvider.notifier);
+      ctrl.trigger(at: here, seconds: 1, test: true);
+      await waitFor(() => s.c.read(crashAlertProvider).phase == CrashAlertPhase.sent);
+      final st = s.c.read(crashAlertProvider);
+      expect(st.smsSent, isNull);
+      expect(st.smsAwaitingUser, isFalse);
+      expect(await ctrl.composeSms(), isNull);
+      expect(s.platform.composed, isEmpty);
+      expect(s.platform.notifications, isEmpty);
+      s.c.dispose();
+    });
+
+    test('sans contact d\'urgence : seuls les potes sont alertés', () async {
+      final s = await setup(iphone: true, contact: false);
+      s.c.read(crashAlertProvider.notifier).trigger(at: here, seconds: 1);
+      await waitFor(() => s.c.read(crashAlertProvider).phase == CrashAlertPhase.sent);
+      final st = s.c.read(crashAlertProvider);
+      expect(st.smsAwaitingUser, isFalse);
+      expect(st.sosSent, isTrue);
+      expect(s.platform.notifications.single.title, 'Alerte chute envoyée');
+      s.c.dispose();
+    });
   });
 }

@@ -51,6 +51,7 @@ class AppSettings {
     this.shareLiveWithFriends = true,
     this.hardBrakeThresholdG = 0.45,
     this.onboardingDone = false,
+    this.rideMapFirst = true,
   });
 
   final ThemeMode themeMode;
@@ -86,6 +87,10 @@ class AppSettings {
   final double hardBrakeThresholdG;
   final bool onboardingDone;
 
+  /// Pendant une balade, ouvrir d'abord le plan de navigation (façon GPS)
+  /// plutôt que le compteur. Le compteur reste accessible d'un geste.
+  final bool rideMapFirst;
+
   /// Clé TomTom effective.
   String get effectiveTomtomKey =>
       tomtomApiKey.trim().isNotEmpty ? tomtomApiKey.trim() : AppConfig.tomtomApiKey;
@@ -111,6 +116,7 @@ class AppSettings {
     bool? shareLiveWithFriends,
     double? hardBrakeThresholdG,
     bool? onboardingDone,
+    bool? rideMapFirst,
   }) =>
       AppSettings(
         themeMode: themeMode ?? this.themeMode,
@@ -131,6 +137,7 @@ class AppSettings {
         shareLiveWithFriends: shareLiveWithFriends ?? this.shareLiveWithFriends,
         hardBrakeThresholdG: hardBrakeThresholdG ?? this.hardBrakeThresholdG,
         onboardingDone: onboardingDone ?? this.onboardingDone,
+        rideMapFirst: rideMapFirst ?? this.rideMapFirst,
       );
 
   Map<String, Object> toPrefs() => {
@@ -152,6 +159,7 @@ class AppSettings {
         'shareLiveWithFriends': shareLiveWithFriends,
         'hardBrakeThresholdG': hardBrakeThresholdG,
         'onboardingDone': onboardingDone,
+        'rideMapFirst': rideMapFirst,
       };
 
   factory AppSettings.fromPrefs(SharedPreferences p) {
@@ -178,6 +186,7 @@ class AppSettings {
       shareLiveWithFriends: b('shareLiveWithFriends', d.shareLiveWithFriends),
       hardBrakeThresholdG: p.getDouble('settings.hardBrakeThresholdG') ?? d.hardBrakeThresholdG,
       onboardingDone: b('onboardingDone', d.onboardingDone),
+      rideMapFirst: b('rideMapFirst', d.rideMapFirst),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cono_moto/core/location.dart';
+import 'package:cono_moto/core/native.dart';
 import 'package:cono_moto/core/notifications.dart';
 import 'package:cono_moto/services/ride/ride_platform.dart';
 
@@ -12,6 +13,10 @@ class FakeRidePlatform implements RidePlatform {
   bool smsGranted = true;
   bool smsWorks = true;
 
+  /// false = comportement iPhone (pas d'envoi automatique, écran Messages).
+  bool smsAutomatic = true;
+  SmsComposeResult composeResult = SmsComposeResult.sent;
+
   final gps = StreamController<RiderPosition>.broadcast();
   final gyro = StreamController<SensorSample>.broadcast();
   final acc = StreamController<SensorSample>.broadcast();
@@ -20,6 +25,7 @@ class FakeRidePlatform implements RidePlatform {
   final cancelled = <int>[];
   final spoken = <String>[];
   final sms = <({String phone, String message})>[];
+  final composed = <({String phone, String message})>[];
   final screenOn = <bool>[];
   int vibrations = 0;
 
@@ -70,8 +76,17 @@ class FakeRidePlatform implements RidePlatform {
   Future<void> vibrate() async => vibrations++;
 
   @override
+  bool get canSendSmsAutomatically => smsAutomatic;
+
+  @override
   Future<bool> sendSms(String phone, String message) async {
     sms.add((phone: phone, message: message));
     return smsWorks;
+  }
+
+  @override
+  Future<SmsComposeResult> composeSms(String phone, String message) async {
+    composed.add((phone: phone, message: message));
+    return composeResult;
   }
 }

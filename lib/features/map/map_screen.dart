@@ -15,8 +15,11 @@ import '../../core/settings.dart';
 import '../../core/theme.dart';
 import '../../core/ui/widgets.dart';
 import '../../data/models/shared.dart';
+import '../../services/routing/geocoder.dart';
 import '../fuel/fuel_providers.dart';
 import '../fuel/fuel_ui.dart';
+import '../navigation/destination_preview_screen.dart';
+import '../navigation/where_to_screen.dart';
 import '../offline/offline_maps_screen.dart';
 import '../ride/ride_controller.dart';
 import '../ride/ride_screen.dart';
@@ -274,6 +277,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.navigation_rounded, color: CmColors.orange),
+              title: const Text('Y aller avec Cono Moto'),
+              subtitle: const Text('Le plus rapide ou par les petites routes'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.of(context).push(
+                  DestinationPreviewScreen.route(
+                    Place(name: 'Point choisi sur la carte', point: p, type: DestinationPreviewScreen.pinType),
+                  ),
+                );
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.navigation_outlined),
               title: const Text('Y aller avec Google Maps'),
               onTap: () {
@@ -422,6 +438,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     trafficCount: settings.showTraffic ? traffic.incidents.length : null,
                     trafficLoading: traffic.loading,
                     trafficError: settings.showTraffic && settings.effectiveTomtomKey.isNotEmpty ? traffic.error : null,
+                    onSearch: () => Navigator.of(context).push(WhereToScreen.route()),
                   ),
                   for (final f in sosFriends) ...[
                     const SizedBox(height: 8),
@@ -510,6 +527,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 }
 
+/// Barre du haut : « Où on va ? » (recherche de destination) + état des potes
+/// et du trafic.
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.ridingFriends,
@@ -517,6 +536,7 @@ class _TopBar extends StatelessWidget {
     required this.trafficCount,
     required this.trafficLoading,
     required this.trafficError,
+    required this.onSearch,
   });
 
   final int ridingFriends;
@@ -524,65 +544,87 @@ class _TopBar extends StatelessWidget {
   final int? trafficCount;
   final bool trafficLoading;
   final String? trafficError;
+  final VoidCallback onSearch;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
+    final scheme = Theme.of(context).colorScheme;
+    final friends = ridingFriends > 0 ? ridingFriends : onlineFriends;
+    return Semantics(
+      button: true,
+      label: 'Où on va ? Rechercher une destination',
       child: GlassPanel(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const _Logo(),
-            if (ridingFriends > 0 || onlineFriends > 0) ...[
-              const SizedBox(width: 10),
-              Pill(
-                icon: Icons.two_wheeler,
-                label: ridingFriends > 0
-                    ? '$ridingFriends pote${ridingFriends > 1 ? 's' : ''} en balade'
-                    : '$onlineFriends pote${onlineFriends > 1 ? 's' : ''}',
-                color: CmColors.teal,
-              ),
-            ],
-            if (trafficLoading) ...[
-              const SizedBox(width: 10),
-              const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-            ] else if (trafficError != null) ...[
-              const SizedBox(width: 10),
-              Tooltip(
-                message: trafficError!,
-                child: const Icon(Icons.wifi_off_rounded, size: 18, color: CmColors.amber),
-              ),
-            ] else if (trafficCount != null && trafficCount! > 0) ...[
-              const SizedBox(width: 10),
-              Pill(icon: Icons.warning_amber_rounded, label: '$trafficCount', color: CmColors.amber),
-            ],
-          ],
+        padding: EdgeInsets.zero,
+        radius: 22,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: onSearch,
+          child: SizedBox(
+            height: 58,
+            child: Row(
+              children: [
+                const SizedBox(width: 12),
+                const _Logo(),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.search_rounded, color: CmColors.orange, size: 24),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'Où on va ?',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: scheme.onSurface),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (friends > 0) ...[
+                  Tooltip(
+                    message: ridingFriends > 0
+                        ? '$ridingFriends pote${ridingFriends > 1 ? 's' : ''} en balade'
+                        : '$onlineFriends pote${onlineFriends > 1 ? 's' : ''}',
+                    child: Pill(icon: Icons.two_wheeler, label: '$friends', color: CmColors.teal),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                if (trafficLoading) ...[
+                  const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 6),
+                ] else if (trafficError != null) ...[
+                  Tooltip(
+                    message: trafficError!,
+                    child: const Icon(Icons.wifi_off_rounded, size: 18, color: CmColors.amber),
+                  ),
+                  const SizedBox(width: 6),
+                ] else if (trafficCount != null && trafficCount! > 0) ...[
+                  Pill(icon: Icons.warning_amber_rounded, label: '$trafficCount', color: CmColors.amber),
+                  const SizedBox(width: 6),
+                ],
+                const SizedBox(width: 6),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
+/// Cône Cono Moto (dans la barre « Où on va ? »).
 class _Logo extends StatelessWidget {
   const _Logo();
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 26,
-          height: 26,
-          decoration: const BoxDecoration(color: CmColors.orange, shape: BoxShape.circle),
-          child: const Icon(Icons.change_history_rounded, size: 17, color: Colors.white),
-        ),
-        const SizedBox(width: 8),
-        Text('CONO', style: CmTheme.numbers(size: 22, color: CmColors.orange)),
-        Text(' MOTO', style: CmTheme.numbers(size: 22, color: Theme.of(context).colorScheme.onSurface)),
-      ],
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: const BoxDecoration(color: CmColors.orange, shape: BoxShape.circle),
+      child: const Icon(Icons.change_history_rounded, size: 20, color: Colors.white),
     );
   }
 }

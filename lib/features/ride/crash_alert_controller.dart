@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/geo.dart';
 import '../../core/location.dart';
+import '../../core/native.dart';
 import '../../core/notifications.dart';
 import '../../core/settings.dart';
 import '../../services/ride/crash_messages.dart';
@@ -37,8 +38,10 @@ class CrashAlertState {
     this.triggeredAt,
     this.contactName = '',
     this.contactPhone = '',
+    this.smsAutomatic = true,
     this.smsSent,
     this.smsMessage,
+    this.smsCompose,
     this.sosSent,
     this.notificationShown = false,
   });
@@ -55,9 +58,17 @@ class CrashAlertState {
   final String contactName;
   final String contactPhone;
 
-  /// null = pas de contact d'urgence (SMS non tenté).
+  /// Le téléphone envoie le SMS tout seul (Android). Sur iPhone (false),
+  /// Apple l'interdit : le SMS est préparé et il faut appuyer sur Envoyer.
+  final bool smsAutomatic;
+
+  /// null = SMS non envoyé (pas de contact, ou sur iPhone en attente de
+  /// l'utilisateur), true = envoyé, false = échec.
   final bool? smsSent;
   final String? smsMessage;
+
+  /// iPhone : issue du dernier écran Messages ouvert (null = pas encore ouvert).
+  final SmsComposeResult? smsCompose;
 
   /// null = pas tenté (pas de position).
   final bool? sosSent;
@@ -65,6 +76,12 @@ class CrashAlertState {
 
   bool get active => phase != CrashAlertPhase.idle;
   bool get hasContact => contactPhone.trim().isNotEmpty;
+
+  /// Nom affiché du contact (ou son numéro).
+  String get contactLabel => contactName.isNotEmpty ? contactName : contactPhone;
+
+  /// iPhone : le SMS de secours est prêt mais il reste à appuyer sur Envoyer.
+  bool get smsAwaitingUser => phase == CrashAlertPhase.sent && !test && hasContact && !smsAutomatic && smsSent != true;
 }
 
 /// Compte à rebours de l'alerte chute et envoi des secours.
@@ -101,6 +118,7 @@ class CrashAlertController extends Notifier<CrashAlertState> {
       triggeredAt: _platform.now(),
       contactName: settings.emergencyName.trim(),
       contactPhone: settings.emergencyPhone.trim(),
+      smsAutomatic: _platform.canSendSmsAutomatically,
     );
     _announce(first: true);
     _platform.vibrate();
@@ -128,8 +146,11 @@ class CrashAlertController extends Notifier<CrashAlertState> {
     final who = s.hasContact ? (s.contactName.isNotEmpty ? s.contactName : 'ton contact d\'urgence') : 'tes potes';
     if (first) {
       _platform.speak(
-        'Chute détectée ! Si tout va bien, appuie sur « Je vais bien ». '
-        'Sinon, $who sera prévenu dans ${s.secondsLeft} secondes.',
+        s.hasContact && !s.smsAutomatic
+            ? 'Chute détectée ! Si tout va bien, appuie sur « Je vais bien ». '
+                  'Sinon, tes potes seront alertés et un SMS pour $who sera prêt dans ${s.secondsLeft} secondes.'
+            : 'Chute détectée ! Si tout va bien, appuie sur « Je vais bien ». '
+                  'Sinon, $who sera prévenu dans ${s.secondsLeft} secondes.',
       );
     } else {
       _platform.speak('Alerte dans ${s.secondsLeft} secondes. Appuie sur « Je vais bien » si tout va bien.');
@@ -166,10 +187,12 @@ class CrashAlertController extends Notifier<CrashAlertState> {
     bool? smsSent;
     bool? sosSent;
     if (s.test) {
-      smsSent = s.hasContact ? true : null;
+      smsSent = s.hasContact && s.smsAutomatic ? true : null;
       sosSent = at != null ? true : null;
     } else {
-      if (s.hasContact) {
+      // iPhone : pas d'envoi automatique possible, le SMS sera préparé dans
+      // Messages (voir [composeSms]).
+      if (s.hasContact && s.smsAutomatic) {
         try {
           smsSent = await _platform.sendSms(s.contactPhone, sms);
         } catch (e) {
@@ -186,15 +209,16 @@ class CrashAlertController extends Notifier<CrashAlertState> {
           sosSent = false;
         }
       }
-      final who = [
-        if (smsSent == true) s.contactName.isNotEmpty ? s.contactName : s.contactPhone,
-        if (sosSent == true) 'tes potes',
-      ];
+      final who = [if (smsSent == true) s.contactLabel, if (sosSent == true) 'tes potes'];
+      final awaitingSms = s.hasContact && !s.smsAutomatic;
       await _safe(
         () => _platform.notify(
           id: notificationId,
-          title: 'Alerte chute envoyée',
-          body: who.isEmpty
+          title: awaitingSms ? 'Chute : envoie le SMS à ${s.contactLabel}' : 'Alerte chute envoyée',
+          body: awaitingSms
+              ? '${sosSent == true ? 'Tes potes sont alertés. ' : ''}'
+                    'Ouvre Cono Moto et appuie sur Envoyer pour prévenir ${s.contactLabel}.'
+              : who.isEmpty
               ? 'Impossible de prévenir quelqu\'un automatiquement : appelle le 112 si besoin.'
               : 'Prévenus : ${who.join(' et ')}. Ouvre Cono Moto pour annuler si tout va bien.',
           channel: CmChannel.safety,
@@ -213,6 +237,11 @@ class CrashAlertController extends Notifier<CrashAlertState> {
     );
     if (s.test) {
       _platform.speak('Test terminé. En vrai, l\'alerte serait partie maintenant.');
+    } else if (s.hasContact && !s.smsAutomatic) {
+      _platform.speak(
+        '${sosSent == true ? 'Tes potes sont alertés. ' : ''}'
+        'Le SMS pour ${s.contactLabel} est prêt : appuie sur Envoyer.',
+      );
     } else if (smsSent == true || sosSent == true) {
       _platform.speak('Alerte envoyée. Tes proches sont prévenus.');
     } else {
@@ -228,6 +257,41 @@ class CrashAlertController extends Notifier<CrashAlertState> {
     }
   }
 
+  bool _composing = false;
+
+  /// iPhone : ouvre Messages avec le SMS de secours pré-rempli (il reste à
+  /// appuyer sur Envoyer). Sans effet en mode test ou sans contact.
+  Future<SmsComposeResult?> composeSms() async {
+    final s = state;
+    if (s.phase != CrashAlertPhase.sent || s.test || !s.hasContact || _composing) return null;
+    _composing = true;
+    SmsComposeResult result;
+    try {
+      result = await _platform.composeSms(
+        s.contactPhone,
+        s.smsMessage ?? buildCrashSms(at: s.position, accuracyM: s.accuracyM, time: s.triggeredAt),
+      );
+    } catch (e) {
+      debugPrint('SMS de secours (Messages) : $e');
+      result = SmsComposeResult.unavailable;
+    } finally {
+      _composing = false;
+    }
+    if (!ref.mounted || state.phase != CrashAlertPhase.sent) return result;
+    state = _copy(
+      smsCompose: result,
+      smsSent: switch (result) {
+        SmsComposeResult.sent => true,
+        SmsComposeResult.failed => false,
+        _ => null, // annulé : on garde l'état précédent
+      },
+    );
+    if (result == SmsComposeResult.sent) {
+      await _safe(() => _platform.cancelNotification(notificationId));
+    }
+    return result;
+  }
+
   /// Fausse alerte après envoi : on lève le SOS et on rassure le contact.
   Future<void> cancelAlert() async {
     final s = state;
@@ -239,7 +303,12 @@ class CrashAlertController extends Notifier<CrashAlertState> {
         debugPrint('Annulation SOS : $e');
       }
       if (s.smsSent == true && s.hasContact) {
-        await _safe(() => _platform.sendSms(s.contactPhone, buildFalseAlarmSms()));
+        if (s.smsAutomatic) {
+          await _safe(() => _platform.sendSms(s.contactPhone, buildFalseAlarmSms()));
+        } else {
+          // iPhone : Messages s'ouvre pré-rempli, il reste à appuyer sur Envoyer.
+          unawaited(_safe(() => _platform.composeSms(s.contactPhone, buildFalseAlarmSms())));
+        }
       }
       await _safe(() => _platform.cancelNotification(notificationId));
     }
@@ -269,6 +338,7 @@ class CrashAlertController extends Notifier<CrashAlertState> {
     double? accuracyM,
     bool? smsSent,
     String? smsMessage,
+    SmsComposeResult? smsCompose,
     bool? sosSent,
     bool? notificationShown,
   }) {
@@ -283,8 +353,10 @@ class CrashAlertController extends Notifier<CrashAlertState> {
       triggeredAt: s.triggeredAt,
       contactName: s.contactName,
       contactPhone: s.contactPhone,
+      smsAutomatic: s.smsAutomatic,
       smsSent: smsSent ?? s.smsSent,
       smsMessage: smsMessage ?? s.smsMessage,
+      smsCompose: smsCompose ?? s.smsCompose,
       sosSent: sosSent ?? s.sosSent,
       notificationShown: notificationShown ?? s.notificationShown,
     );

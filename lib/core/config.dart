@@ -1,10 +1,21 @@
+import 'package:flutter/foundation.dart';
+
 /// Configuration injectée à la compilation via `--dart-define`
-/// (voir README et `.github/workflows/android.yml`).
+/// (voir README, `.github/workflows/android.yml` et `ios.yml`).
 class AppConfig {
   AppConfig._();
 
   static const firebaseApiKey = String.fromEnvironment('FIREBASE_API_KEY');
+
+  /// App ID Firebase de l'appli Android (`1:…:android:…`).
   static const firebaseAppId = String.fromEnvironment('FIREBASE_APP_ID');
+
+  /// App ID Firebase de l'appli iOS (`1:…:ios:…`), déclarée dans la console
+  /// avec le bundle id [iosBundleId].
+  static const firebaseIosAppId = String.fromEnvironment('FIREBASE_IOS_APP_ID');
+
+  /// Facultatif sur iOS (connexion Google, non utilisée pour l'instant).
+  static const firebaseIosClientId = String.fromEnvironment('FIREBASE_IOS_CLIENT_ID');
   static const firebaseMessagingSenderId = String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID');
   static const firebaseProjectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
   static const firebaseDatabaseUrl = String.fromEnvironment('FIREBASE_DATABASE_URL');
@@ -16,11 +27,20 @@ class AppConfig {
   /// URL de la page web de suivi en direct (ex : https://mon-projet.web.app/live.html).
   static const shareViewerUrl = String.fromEnvironment('SHARE_VIEWER_URL');
 
-  /// Firebase est-il configuré dans ce build ? Sinon les fonctions entre potes
-  /// sont désactivées et l'app fonctionne en solo.
-  static bool get firebaseConfigured =>
+  /// Identifiant de l'appli iOS (PRODUCT_BUNDLE_IDENTIFIER du projet Xcode).
+  static const iosBundleId = 'fr.conomoto.conoMoto';
+
+  /// App ID Firebase à utiliser sur la plateforme courante (vide si absent).
+  static String firebaseAppIdFor(TargetPlatform platform) =>
+      platform == TargetPlatform.iOS ? firebaseIosAppId : firebaseAppId;
+
+  /// Firebase est-il configuré dans ce build pour cette plateforme ? Sinon les
+  /// fonctions entre potes sont désactivées et l'app fonctionne en solo.
+  static bool get firebaseConfigured => firebaseConfiguredFor(defaultTargetPlatform);
+
+  static bool firebaseConfiguredFor(TargetPlatform platform) =>
       firebaseApiKey.isNotEmpty &&
-      firebaseAppId.isNotEmpty &&
+      firebaseAppIdFor(platform).isNotEmpty &&
       firebaseProjectId.isNotEmpty &&
       firebaseDatabaseUrl.isNotEmpty;
 

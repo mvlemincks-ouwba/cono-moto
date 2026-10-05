@@ -6,12 +6,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/location.dart';
+import '../../core/native.dart';
 import '../../core/theme.dart';
 import '../../services/ride/crash_messages.dart';
 import 'crash_alert_controller.dart';
 
 /// Alerte de chute plein écran : compte à rebours, « JE VAIS BIEN » géant,
 /// appel du 112, puis récapitulatif de ce qui a été envoyé.
+///
+/// Sur iPhone, Apple interdit l'envoi automatique de SMS : à l'expiration, les
+/// potes sont alertés et l'écran Messages s'ouvre pré-rempli (gros bouton
+/// « Envoyer le SMS » pour le rouvrir).
 ///
 /// Poussé par le RideController via `rootNavigatorKey` ; l'état vit dans
 /// [crashAlertProvider] (l'alerte part même si l'écran n'est pas affiché).
@@ -37,15 +42,68 @@ class CrashAlertScreen extends ConsumerStatefulWidget {
   ConsumerState<CrashAlertScreen> createState() => _CrashAlertScreenState();
 }
 
-class _CrashAlertScreenState extends ConsumerState<CrashAlertScreen> with SingleTickerProviderStateMixin {
+class _CrashAlertScreenState extends ConsumerState<CrashAlertScreen>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
     ..repeat(reverse: true);
   bool _popped = false;
+  bool _autoComposeDone = false;
+  bool _composeOnResume = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pulse.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _composeOnResume) {
+      _composeOnResume = false;
+      _composeSms();
+    }
+  }
+
+  /// iPhone : ouvre Messages une fois, tout de suite si l'app est affichée,
+  /// sinon dès que le motard (ou un témoin) revient dans l'app.
+  void _maybeAutoCompose() {
+    if (_autoComposeDone || !ref.read(crashAlertProvider).smsAwaitingUser) return;
+    _autoComposeDone = true;
+    final life = WidgetsBinding.instance.lifecycleState;
+    if (life == null || life == AppLifecycleState.resumed) {
+      _composeSms();
+    } else {
+      _composeOnResume = true;
+    }
+  }
+
+  Future<void> _composeSms() async {
+    final alert = ref.read(crashAlertProvider);
+    final r = await ref.read(crashAlertProvider.notifier).composeSms();
+    if (!mounted) return;
+    final msg = switch (r) {
+      SmsComposeResult.unavailable =>
+        'Ce téléphone ne peut pas envoyer de SMS : appelle ${alert.contactLabel} ou le 112.',
+      SmsComposeResult.failed => 'L\'envoi du SMS a échoué : réessaie ou appelle ${alert.contactLabel}.',
+      _ => null,
+    };
+    if (msg != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _callContact() async {
+    HapticFeedback.heavyImpact();
+    final alert = ref.read(crashAlertProvider);
+    final ok = await NativeBridge.call(alert.contactPhone);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Appelle ${alert.contactPhone}.')));
+    }
   }
 
   void _closeScreen() {
@@ -67,7 +125,10 @@ class _CrashAlertScreenState extends ConsumerState<CrashAlertScreen> with Single
     final alert = ref.watch(crashAlertProvider);
     ref.listen(crashAlertProvider.select((s) => s.phase), (prev, next) {
       if (next == CrashAlertPhase.idle) _closeScreen();
-      if (next == CrashAlertPhase.sent) _pulse.stop();
+      if (next == CrashAlertPhase.sent) {
+        _pulse.stop();
+        _maybeAutoCompose();
+      }
     });
 
     return PopScope(
@@ -87,7 +148,12 @@ class _CrashAlertScreenState extends ConsumerState<CrashAlertScreen> with Single
             child: switch (alert.phase) {
               CrashAlertPhase.countdown => _Countdown(alert: alert, onCall: _call112),
               CrashAlertPhase.sending => const _Sending(),
-              CrashAlertPhase.sent => _Sent(alert: alert, onCall: _call112),
+              CrashAlertPhase.sent => _Sent(
+                alert: alert,
+                onCall: _call112,
+                onComposeSms: _composeSms,
+                onCallContact: _callContact,
+              ),
               CrashAlertPhase.idle => const SizedBox.shrink(),
             },
           ),
@@ -108,9 +174,12 @@ class _Countdown extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ctrl = ref.read(crashAlertProvider.notifier);
-    final who = alert.hasContact
-        ? '${alert.contactName.isNotEmpty ? alert.contactName : alert.contactPhone} et tes potes seront prévenus'
-        : 'Tes potes seront prévenus';
+    final who = !alert.hasContact
+        ? 'Tes potes seront prévenus'
+        : alert.smsAutomatic
+        ? '${alert.contactLabel} et tes potes seront prévenus'
+        // iPhone : le SMS est préparé, pas envoyé tout seul.
+        : 'Tes potes seront alertés et un SMS pour ${alert.contactLabel} sera prêt';
 
     final header = Column(
       mainAxisSize: MainAxisSize.min,
@@ -324,10 +393,14 @@ class _Sending extends StatelessWidget {
 }
 
 class _Sent extends ConsumerWidget {
-  const _Sent({required this.alert, required this.onCall});
+  const _Sent({required this.alert, required this.onCall, required this.onComposeSms, required this.onCallContact});
 
   final CrashAlertState alert;
   final VoidCallback onCall;
+  final VoidCallback onComposeSms;
+  final VoidCallback onCallContact;
+
+  static const _red = Color(0xFFB91C1C);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -343,7 +416,7 @@ class _Sent extends ConsumerWidget {
           title: 'Pas de contact d\'urgence',
           subtitle: 'Ajoute-en un dans les réglages pour qu\'il reçoive un SMS.',
         )
-      else
+      else if (alert.smsAutomatic)
         _ResultRow(
           ok: alert.smsSent,
           icon: Icons.sms_rounded,
@@ -351,6 +424,24 @@ class _Sent extends ConsumerWidget {
               ? (alert.test ? 'SMS qui serait envoyé à $contact' : 'SMS envoyé à $contact')
               : 'SMS non envoyé à $contact',
           subtitle: alert.smsSent == true ? null : 'Vérifie la permission SMS de Cono Moto.',
+        )
+      else
+        // iPhone : Apple interdit l'envoi automatique, le SMS est préparé.
+        _ResultRow(
+          ok: alert.smsSent,
+          icon: Icons.sms_rounded,
+          title: alert.test
+              ? 'SMS qui serait préparé pour $contact'
+              : switch (alert.smsSent) {
+                  true => 'SMS envoyé à $contact',
+                  false => 'SMS non envoyé à $contact',
+                  null => 'SMS prêt pour $contact',
+                },
+          subtitle: alert.test
+              ? 'Sur iPhone, il faudra appuyer sur Envoyer : Apple interdit l\'envoi automatique.'
+              : alert.smsSent == true
+              ? null
+              : 'Apple interdit l\'envoi automatique : appuie sur « Envoyer le SMS ».',
         ),
       _ResultRow(
         ok: alert.sosSent,
@@ -381,7 +472,11 @@ class _Sent extends ConsumerWidget {
         const Icon(Icons.sos_rounded, color: Colors.white, size: 56),
         const SizedBox(height: 4),
         Text(
-          alert.test ? 'TEST TERMINÉ' : 'ALERTE ENVOYÉE',
+          alert.test
+              ? 'TEST TERMINÉ'
+              : alert.smsAwaitingUser
+              ? 'ALERTE CHUTE'
+              : 'ALERTE ENVOYÉE',
           textAlign: TextAlign.center,
           style: CmTheme.numbers(size: 42, color: Colors.white, weight: FontWeight.w800),
         ),
@@ -389,11 +484,40 @@ class _Sent extends ConsumerWidget {
         Text(
           alert.test
               ? 'Voici ce qui partirait en cas de vraie chute.'
+              : alert.smsAwaitingUser
+              ? 'Appuie sur « Envoyer le SMS » pour prévenir ${alert.contactLabel}. Les secours : 112.'
               : 'Reste où tu es si tu es blessé. Les secours : 112.',
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 20),
+        if (alert.smsAwaitingUser) ...[
+          // iPhone : action principale, en haut et géante (utilisable avec des gants).
+          SizedBox(
+            height: 84,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: _red,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                elevation: 6,
+              ),
+              onPressed: () {
+                HapticFeedback.mediumImpact();
+                onComposeSms();
+              },
+              icon: const Icon(Icons.sms_rounded, size: 30),
+              label: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Envoyer le SMS à ${alert.contactLabel}',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         Container(
           decoration: BoxDecoration(
             color: Colors.black.withValues(alpha: 0.22),
@@ -422,7 +546,7 @@ class _Sent extends ConsumerWidget {
           child: FilledButton.icon(
             style: FilledButton.styleFrom(
               backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFFB91C1C),
+              foregroundColor: _red,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             ),
             onPressed: onCall,
@@ -430,6 +554,25 @@ class _Sent extends ConsumerWidget {
             label: const Text('Appeler les secours (112)', style: TextStyle(fontSize: 18)),
           ),
         ),
+        if (alert.hasContact && !alert.test) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 60,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white, width: 2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+              onPressed: onCallContact,
+              icon: const Icon(Icons.call_rounded),
+              label: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('Appeler ${alert.contactLabel}', style: const TextStyle(fontSize: 17)),
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         SizedBox(
           height: 64,
@@ -450,9 +593,11 @@ class _Sent extends ConsumerWidget {
         if (!alert.test) ...[
           const SizedBox(height: 6),
           Text(
-            alert.smsSent == true
+            alert.smsSent != true
+                ? 'Annuler lève l\'alerte chez tes potes.'
+                : alert.smsAutomatic
                 ? 'Annuler lève l\'alerte chez tes potes et envoie un SMS « fausse alerte » à ton contact.'
-                : 'Annuler lève l\'alerte chez tes potes.',
+                : 'Annuler lève l\'alerte chez tes potes et prépare un SMS « fausse alerte » pour ton contact.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13),
           ),

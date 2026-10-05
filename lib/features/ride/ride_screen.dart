@@ -1,5 +1,6 @@
-// HUD plein écran pendant la balade : compteur ou carte, gros boutons
-// utilisables avec des gants. Contrat public : RideScreen + RideScreen.route().
+// HUD plein écran pendant la balade : plan de navigation (par défaut, voir
+// AppSettings.rideMapFirst) ou compteur, gros boutons utilisables avec des
+// gants. Contrat public : RideScreen + RideScreen.route().
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,15 +8,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/native.dart';
 import '../../core/geo.dart';
 import '../../core/location.dart';
-import '../../core/map/cm_map.dart';
 import '../../core/providers.dart';
 import '../../core/settings.dart';
 import '../../core/theme.dart';
 import '../../core/ui/widgets.dart';
 import '../fuel/fuel_ui.dart';
 import '../garage/autonomy.dart';
+import '../navigation/navigation_view.dart';
 import '../routes/guidance_banner.dart';
 import '../social/social_sheets.dart';
 import 'crash_alert_screen.dart';
@@ -23,13 +25,23 @@ import 'ride_controller.dart';
 import 'ride_summary_screen.dart';
 import 'widgets/lean_gauge.dart';
 
-/// Disposition du HUD.
+/// Disposition du HUD : compteur, ou plan de navigation plein écran (map).
 enum HudLayout { gauges, map }
 
 class RideScreen extends ConsumerStatefulWidget {
-  const RideScreen({super.key});
+  const RideScreen({super.key, this.initialLayout});
 
-  static Route<void> route() => MaterialPageRoute(builder: (_) => const RideScreen());
+  /// Vue à l'ouverture (sinon : celle choisie pendant cette balade, puis le
+  /// réglage « plan d'abord »).
+  final HudLayout? initialLayout;
+
+  /// Nom de la route de navigation (pour y revenir avec popUntil).
+  static const routeName = '/balade';
+
+  static Route<void> route({HudLayout? initialLayout}) => MaterialPageRoute(
+    settings: const RouteSettings(name: routeName),
+    builder: (_) => RideScreen(initialLayout: initialLayout),
+  );
 
   /// Le HUD est toujours sombre : contraste maximal, pas d'éblouissement.
   static final ThemeData hudTheme = CmTheme.dark();
@@ -39,25 +51,41 @@ class RideScreen extends ConsumerStatefulWidget {
 }
 
 class _RideScreenState extends ConsumerState<RideScreen> {
+  /// Vue choisie pendant la balade en cours (« idBalade|vue »).
   static const _layoutKey = 'ride.hudLayout';
-  HudLayout _layout = HudLayout.gauges;
+  HudLayout? _layout;
   bool _finishing = false;
 
-  @override
-  void initState() {
-    super.initState();
+  /// Vue à afficher pour la balade [rideId] (résolue une fois puis gardée).
+  HudLayout _layoutFor(String? rideId) {
+    final current = _layout;
+    if (current != null) return current;
+    final initial = widget.initialLayout;
+    if (initial != null) return _layout = initial;
     try {
       final saved = ref.read(sharedPreferencesProvider).getString(_layoutKey);
-      if (saved == HudLayout.map.name) _layout = HudLayout.map;
+      final parts = saved?.split('|');
+      if (rideId != null && parts != null && parts.length == 2 && parts[0] == rideId) {
+        final l = HudLayout.values.where((v) => v.name == parts[1]).firstOrNull;
+        if (l != null) return _layout = l;
+      }
+    } catch (_) {}
+    return _layout = ref.read(settingsProvider).rideMapFirst ? HudLayout.map : HudLayout.gauges;
+  }
+
+  void _setLayout(HudLayout layout) {
+    if (_layout == layout) return;
+    setState(() => _layout = layout);
+    final rideId = ref.read(rideControllerProvider).rideId;
+    if (rideId == null) return;
+    try {
+      ref.read(sharedPreferencesProvider).setString(_layoutKey, '$rideId|${layout.name}');
     } catch (_) {}
   }
 
   void _toggleLayout() {
     HapticFeedback.selectionClick();
-    setState(() => _layout = _layout == HudLayout.gauges ? HudLayout.map : HudLayout.gauges);
-    try {
-      ref.read(sharedPreferencesProvider).setString(_layoutKey, _layout.name);
-    } catch (_) {}
+    _setLayout(_layout == HudLayout.map ? HudLayout.gauges : HudLayout.map);
   }
 
   Future<void> _finish() async {
@@ -98,12 +126,22 @@ class _RideScreenState extends ConsumerState<RideScreen> {
   @override
   Widget build(BuildContext context) {
     final status = ref.watch(rideControllerProvider.select((s) => s.status));
+    final rideId = ref.watch(rideControllerProvider.select((s) => s.rideId));
     final active = status == RideStatus.recording || status == RideStatus.paused;
+    // Nouvelle destination choisie en cours de balade : on passe sur le plan.
+    ref.listen(activeRouteProvider, (prev, next) {
+      if (next != null && next.id != prev?.id && ref.read(rideControllerProvider).isActive) {
+        _setLayout(HudLayout.map);
+      }
+    });
     final Widget body;
     if (_finishing || status == RideStatus.finishing) {
       body = const _FinishingView();
     } else if (active) {
-      body = _HudView(layout: _layout, onToggleLayout: _toggleLayout, onFinish: _finish);
+      final layout = _layoutFor(rideId);
+      body = layout == HudLayout.map
+          ? NavigationView(key: const ValueKey('nav'), onFinish: _finish, onShowGauges: _toggleLayout)
+          : _HudView(layout: layout, onToggleLayout: _toggleLayout, onFinish: _finish);
     } else {
       body = const _ReadyView();
     }
@@ -363,7 +401,9 @@ class _SafetyCard extends StatelessWidget {
       icon: Icons.health_and_safety_rounded,
       color: CmColors.green,
       title: 'Détection de chute active',
-      message: 'En cas de chute sans réponse, $name reçoit un SMS avec ta position.',
+      message: NativeBridge.canSendSmsAutomatically
+          ? 'En cas de chute sans réponse, $name reçoit un SMS avec ta position.'
+          : 'En cas de chute sans réponse, tes potes sont alertés et un SMS pour $name est prêt à envoyer.',
     );
   }
 }
@@ -437,12 +477,7 @@ class _HudView extends ConsumerWidget {
             ),
             if (hasRoute) const Padding(padding: EdgeInsets.fromLTRB(12, 0, 12, 8), child: GuidanceBanner()),
             const _FuelBanner(),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: layout == HudLayout.gauges ? const _GaugesBody() : const _MapBody(),
-              ),
-            ),
+            const Expanded(child: _GaugesBody()),
           ],
         );
         if (landscape) {
@@ -497,8 +532,10 @@ class _TopBar extends ConsumerWidget {
           const _GpsBadge(),
           const SizedBox(width: 6),
           MapRoundButton(
-            icon: layout == HudLayout.gauges ? Icons.map_rounded : Icons.speed_rounded,
-            tooltip: layout == HudLayout.gauges ? 'Vue carte' : 'Vue compteur',
+            icon: layout == HudLayout.gauges ? Icons.navigation_rounded : Icons.speed_rounded,
+            tooltip: layout == HudLayout.gauges ? 'Vue navigation' : 'Vue compteur',
+            size: 56,
+            active: layout == HudLayout.gauges,
             onPressed: onToggleLayout,
           ),
           const SizedBox(width: 6),
@@ -536,8 +573,8 @@ class _TopBar extends ConsumerWidget {
                   },
                 ),
                 _SheetAction(
-                  icon: layout == HudLayout.gauges ? Icons.map_rounded : Icons.speed_rounded,
-                  label: layout == HudLayout.gauges ? 'Passer en vue carte' : 'Passer en vue compteur',
+                  icon: layout == HudLayout.gauges ? Icons.navigation_rounded : Icons.speed_rounded,
+                  label: layout == HudLayout.gauges ? 'Passer en vue navigation' : 'Passer en vue compteur',
                   onTap: () {
                     Navigator.pop(ctx);
                     onToggleLayout();
@@ -920,121 +957,6 @@ class _StatTiles extends ConsumerWidget {
           StatTile(compact: true, label: 'Virages', value: '$curves'),
         ]),
       ],
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Vue carte
-// -----------------------------------------------------------------------------
-
-class _MapBody extends ConsumerStatefulWidget {
-  const _MapBody();
-
-  @override
-  ConsumerState<_MapBody> createState() => _MapBodyState();
-}
-
-class _MapBodyState extends ConsumerState<_MapBody> {
-  FollowMode _follow = FollowMode.heading;
-  List<MapLine> _lines = const [];
-  Object? _linesTrack;
-  String? _linesRouteId;
-
-  List<MapLine> _buildLines(List<GeoPoint> track, List<GeoPoint>? route, String? routeId) {
-    if (identical(track, _linesTrack) && routeId == _linesRouteId) return _lines;
-    _linesTrack = track;
-    _linesRouteId = routeId;
-    final here = ref.read(positionHubProvider)?.point;
-    _lines = [
-      if (route != null && route.length >= 2)
-        MapLine(id: 'ride-route', points: route, color: CmColors.sky, width: 7, opacity: 0.75),
-      if (track.length >= 2 || (track.isNotEmpty && here != null))
-        MapLine(id: 'ride-track', points: [...track, ?here], color: CmColors.orange, width: 6),
-    ];
-    return _lines;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final track = ref.watch(rideControllerProvider.select((s) => s.track));
-    final route = ref.watch(activeRouteProvider) ?? ref.watch(rideControllerProvider.select((s) => s.route));
-    final lines = _buildLines(track, route?.points, route?.id);
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: CmMap(
-            lines: lines,
-            followMode: _follow,
-            onFollowModeChanged: (m) => setState(() => _follow = m),
-            tilt: 55,
-            initialZoom: 16,
-            compassEnabled: false,
-          ),
-        ),
-        if (_follow != FollowMode.heading)
-          Positioned(
-            right: 12,
-            top: 12,
-            child: MapRoundButton(
-              icon: Icons.navigation_rounded,
-              tooltip: 'Recentrer',
-              size: 56,
-              active: true,
-              onPressed: () => setState(() => _follow = FollowMode.heading),
-            ),
-          ),
-        const Positioned(left: 12, right: 12, bottom: 12, child: _MiniCounter()),
-      ],
-    );
-  }
-}
-
-class _MiniCounter extends ConsumerWidget {
-  const _MiniCounter();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final s = ref.watch(rideControllerProvider);
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    final leanColor = CmColors.forLean(s.leanDeg.abs());
-    return GlassPanel(
-      padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
-      child: Row(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                s.hasFix ? '${s.speedKmh < 2 ? 0 : s.speedKmh.round()}' : '--',
-                style: CmTheme.numbers(size: 58, color: Colors.white, weight: FontWeight.w800),
-              ),
-              Text('km/h', style: CmTheme.numbers(size: 16, color: muted)),
-            ],
-          ),
-          const SizedBox(width: 6),
-          LeanGauge(
-            angleDeg: s.leanDeg,
-            maxLeftDeg: s.maxLeanLeftDeg,
-            maxRightDeg: s.maxLeanRightDeg,
-            size: 104,
-            showValue: false,
-            dimmed: s.isPaused,
-          ),
-          Text('${s.leanDeg.abs().round()}°', style: CmTheme.numbers(size: 30, color: leanColor)),
-          const Spacer(),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(Fmt.distance(s.distanceM), style: CmTheme.numbers(size: 24, color: Colors.white)),
-              const SizedBox(height: 4),
-              Text('moy. ${Fmt.number(s.avgSpeedKmh)} km/h', style: TextStyle(color: muted, fontSize: 12)),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }

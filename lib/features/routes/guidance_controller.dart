@@ -8,7 +8,8 @@ import '../../core/settings.dart';
 import '../../data/models/planned_route.dart';
 import '../../services/routing/guidance_engine.dart';
 import '../../services/routing/http_support.dart';
-import '../../services/routing/valhalla_client.dart';
+import '../navigation/destination_routing.dart';
+import '../navigation/navigation_logic.dart';
 import '../ride/ride_controller.dart';
 import 'routes_providers.dart';
 
@@ -25,12 +26,29 @@ class VoiceGuide {
         await tts.setSpeechRate(0.5);
         await tts.setVolume(1);
         await tts.awaitSpeakCompletion(false);
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) await _setupIosAudio(tts);
         _ready = true;
       }
       // focus : baisse la musique le temps de l'annonce (Android).
       await tts.speak(text, focus: true);
     } catch (e) {
       debugPrint('Synthèse vocale indisponible : $e');
+    }
+  }
+
+  /// iOS : session audio partagée en lecture, qui baisse la musique (appli de
+  /// musique, intercom Bluetooth) le temps de l'annonce sans la couper, puis
+  /// la rend à la fin (autoStopSharedSession).
+  static Future<void> _setupIosAudio(FlutterTts tts) async {
+    try {
+      await tts.setSharedInstance(true);
+      await tts.setIosAudioCategory(IosTextToSpeechAudioCategory.playback, const [
+        IosTextToSpeechAudioCategoryOptions.duckOthers,
+        IosTextToSpeechAudioCategoryOptions.mixWithOthers,
+      ], IosTextToSpeechAudioMode.voicePrompt);
+      await tts.autoStopSharedSession(true);
+    } catch (e) {
+      debugPrint('Session audio iOS : $e');
     }
   }
 
@@ -47,11 +65,29 @@ final voiceGuideProvider = Provider<VoiceGuide>((ref) {
   return v;
 });
 
+/// Dernier itinéraire issu d'un recalcul en cours de route (pour ne pas
+/// annoncer un nouveau « C'est parti ! »).
+class ReroutedRouteNotifier extends Notifier<PlannedRoute?> {
+  @override
+  PlannedRoute? build() => null;
+
+  void mark(PlannedRoute route) => state = route;
+}
+
+final reroutedRouteProvider = NotifierProvider<ReroutedRouteNotifier, PlannedRoute?>(ReroutedRouteNotifier.new);
+
 /// Moteur de guidage de l'itinéraire actif (recréé quand l'itinéraire change).
 final guidanceEngineProvider = Provider<GuidanceEngine?>((ref) {
   final route = ref.watch(activeRouteProvider);
   if (route == null || route.points.length < 2) return null;
-  return GuidanceEngine(route);
+  return GuidanceEngine(route, rerouted: identical(ref.read(reroutedRouteProvider), route));
+});
+
+/// Anti-spam du recalcul automatique, une instance par balade (survit aux
+/// recalculs, qui recréent le contrôleur de guidage).
+final autoRerouteProvider = Provider<AutoReroutePolicy>((ref) {
+  ref.watch(rideControllerProvider.select((s) => s.rideId));
+  return AutoReroutePolicy();
 });
 
 /// État du guidage affiché par [GuidanceBanner].
@@ -109,6 +145,11 @@ class GuidanceController extends Notifier<GuidanceState?> {
     state = current.copyWith(snapshot: snap);
     final say = snap.announcement;
     if (say != null) _speak(say);
+    // Recalcul automatique quand on sort de l'itinéraire (anti-spam inclus).
+    final policy = ref.read(autoRerouteProvider);
+    if (policy.onSnapshot(offRoute: snap.offRoute, arrived: snap.arrived, at: p.time, busy: current.recalculating)) {
+      recalculate(auto: true);
+    }
   }
 
   void _speak(String text) {
@@ -117,23 +158,29 @@ class GuidanceController extends Notifier<GuidanceState?> {
     ref.read(voiceGuideProvider).speak(text);
   }
 
-  /// Recalcule depuis ma position vers la suite de l'itinéraire.
-  Future<void> recalculate() async {
+  /// Recalcule depuis ma position vers la suite de l'itinéraire (ou vers la
+  /// destination pour un itinéraire « Où on va ? »).
+  ///
+  /// [auto] : lancé tout seul en sortant de l'itinéraire (annonce « Recalcul
+  /// de l'itinéraire »). Sinon, bouton de secours.
+  Future<void> recalculate({bool auto = false}) async {
     final s = state;
     final engine = ref.read(guidanceEngineProvider);
     if (s == null || engine == null || s.recalculating) return;
     final pos = ref.read(positionHubProvider);
     if (pos == null) {
-      state = s.copyWith(error: 'Position GPS inconnue, patiente un instant.');
+      if (!auto) state = s.copyWith(error: 'Position GPS inconnue, patiente un instant.');
       return;
     }
+    if (!auto) ref.read(autoRerouteProvider).recordManual(pos.time);
     state = s.copyWith(recalculating: true, clearError: true);
+    if (auto) _speak("Recalcul de l'itinéraire.");
     try {
-      final via = engine.remainingViaPoints();
+      final via = rerouteTargets(s.route, engine);
       final v = await ref.read(valhallaClientProvider).routeThrough([
         pos.point,
         ...via,
-      ], costing: MotorcycleCosting.forStyle(s.route.style));
+      ], costing: rerouteCosting(s.route));
       if (!ref.mounted) return;
       final old = s.route;
       final rerouted = PlannedRoute(
@@ -153,8 +200,9 @@ class GuidanceController extends Notifier<GuidanceState?> {
         author: old.author,
         favorite: old.favorite,
       );
-      _speak('Itinéraire recalculé.');
+      if (!auto) _speak('Itinéraire recalculé.');
       // Recrée le moteur (et ce contrôleur) sur le nouvel itinéraire.
+      ref.read(reroutedRouteProvider.notifier).mark(rerouted);
       ref.read(activeRouteProvider.notifier).set(rerouted);
     } on RoutingException catch (e) {
       if (!ref.mounted) return;

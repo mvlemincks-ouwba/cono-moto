@@ -1,0 +1,166 @@
+name: IPA iPhone
+
+# Les minutes macOS coûtent 10× plus cher que Linux sur un dépôt privé :
+# pas de build à chaque push de branche. Lancement manuel (onglet Actions ›
+# « IPA iPhone » › Run workflow), push sur main et tags v*.
+on:
+  workflow_dispatch:
+  # Vérifie que l'app compile pour iPhone avant de fusionner dans main.
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "web_share/**"
+      - "firebase/**"
+      - "android/**"
+  push:
+    branches: [main]
+    tags: ["v*"]
+    # Ignoré pour les tags (GitHub n'applique pas les filtres de chemins aux tags).
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "web_share/**"
+      - "firebase/**"
+      - "android/**"
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: IPA non signé (Sideloadly)
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # Xcode stable le plus récent de l'image (Firebase iOS 12 demande Xcode ≥ 16.2).
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+
+      - name: Versions
+        run: |
+          xcodebuild -version
+          flutter --version
+          pod --version
+
+      - name: Dépendances
+        run: flutter pub get
+
+      # Mêmes clés que le build Android (secrets du dépôt), + l'App ID Firebase
+      # de l'appli iOS. Toutes facultatives : sans Firebase, l'app tourne en solo.
+      - name: Configuration de build
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_IOS_APP_ID: ${{ secrets.FIREBASE_IOS_APP_ID }}
+          FIREBASE_IOS_CLIENT_ID: ${{ secrets.FIREBASE_IOS_CLIENT_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
+          SHARE_VIEWER_URL: ${{ secrets.SHARE_VIEWER_URL }}
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          keys = ["FIREBASE_API_KEY", "FIREBASE_APP_ID", "FIREBASE_IOS_APP_ID", "FIREBASE_IOS_CLIENT_ID",
+                  "FIREBASE_MESSAGING_SENDER_ID", "FIREBASE_PROJECT_ID", "FIREBASE_DATABASE_URL",
+                  "FIREBASE_STORAGE_BUCKET", "TOMTOM_API_KEY", "SHARE_VIEWER_URL"]
+          conf = {k: os.environ.get(k, "") for k in keys}
+          with open("build-config.json", "w") as f:
+              json.dump(conf, f)
+          ios_ok = all(conf[k] for k in ["FIREBASE_API_KEY", "FIREBASE_IOS_APP_ID", "FIREBASE_PROJECT_ID",
+                                         "FIREBASE_DATABASE_URL"])
+          print("Firebase configuré pour iPhone :", ios_ok)
+          if conf["FIREBASE_APP_ID"] and not conf["FIREBASE_IOS_APP_ID"]:
+              print("::warning::Secret FIREBASE_IOS_APP_ID manquant : l'app iPhone sera en mode solo "
+                    "(déclare une appli iOS dans la console Firebase, voir README).")
+          print("TomTom configuré :", bool(conf["TOMTOM_API_KEY"]))
+          EOF
+
+      # Build sans signature : l'IPA est signé à l'installation par Sideloadly
+      # (Apple ID gratuit) ou par Xcode. PERMISSION_HANDLER_INFO_PLIST indique à
+      # permission_handler (intégré par Swift Package Manager) quel Info.plist
+      # lire pour savoir quelles permissions compiler.
+      - name: Build iOS (sans signature)
+        env:
+          PERMISSION_HANDLER_INFO_PLIST: ${{ github.workspace }}/ios/Runner/Info.plist
+          PERMISSION_HANDLER_VERBOSE: "1"
+        run: |
+          flutter build ios --release --no-codesign \
+            --build-number=${{ github.run_number }} \
+            --dart-define-from-file=build-config.json
+
+      - name: Empaquetage de l'IPA
+        run: |
+          rm -rf build/ipa-unsigned
+          mkdir -p build/ipa-unsigned/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ipa-unsigned/Payload/
+          (cd build/ipa-unsigned && zip -qry ../../cono-moto-unsigned.ipa Payload)
+          ls -lh cono-moto-unsigned.ipa
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" build/ios/iphoneos/Runner.app/Info.plist
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" build/ios/iphoneos/Runner.app/Info.plist
+          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" build/ios/iphoneos/Runner.app/Info.plist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cono-moto-ipa
+          path: cono-moto-unsigned.ipa
+          retention-days: 30
+
+      # Sur main : ajoute l'IPA à la release « derniere-version » (à côté de
+      # l'APK Android) pour avoir un lien de téléchargement stable.
+      - name: Release « derniere-version »
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: derniere-version
+          name: Cono Moto (dernière version)
+          prerelease: true
+          make_latest: false
+          files: cono-moto-unsigned.ipa
+
+      - name: Release taguée
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cono-moto-unsigned.ipa
+          generate_release_notes: true
+
+  # ---------------------------------------------------------------------------
+  # PLUS TARD (désactivé) : signature + envoi sur TestFlight.
+  # Nécessite un compte Apple Developer payant (99 €/an) et ces secrets :
+  #   APPSTORE_ISSUER_ID, APPSTORE_KEY_ID, APPSTORE_PRIVATE_KEY (clé API
+  #   App Store Connect, rôle « App Manager »), APPLE_TEAM_ID,
+  #   IOS_DIST_CERT_P12_BASE64 + IOS_DIST_CERT_PASSWORD (certificat
+  #   « Apple Distribution »), IOS_PROFILE_BASE64 (profil « App Store » pour
+  #   fr.conomoto.conoMoto).
+  # Étapes : importer le certificat dans un trousseau temporaire, installer le
+  # profil, puis
+  #   flutter build ipa --release --export-options-plist=ios/ExportOptions.plist \
+  #     --build-number=${{ github.run_number }} --dart-define-from-file=build-config.json
+  #   xcrun altool --upload-app -f build/ios/ipa/*.ipa -t ios \
+  #     --apiKey "$APPSTORE_KEY_ID" --apiIssuer "$APPSTORE_ISSUER_ID"
+  # (ou l'action apple-actions/upload-testflight-build). Pour l'activer :
+  # décommenter, créer ios/ExportOptions.plist (method app-store-connect,
+  # teamID, provisioningProfiles) et ajouter les secrets.
+  #
+  # testflight:
+  #   needs: build
+  #   if: startsWith(github.ref, 'refs/tags/v')
+  #   runs-on: macos-15
+  #   steps: ...

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/location.dart';
+import '../../core/native.dart';
 import '../../core/notifications.dart';
 import '../../core/settings.dart';
 import '../../core/theme.dart';
@@ -48,7 +48,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   Future<void> _finish() async {
     final phone = _phone.text.trim();
-    if (phone.isNotEmpty) await Permission.sms.request();
+    // Android uniquement : sur iPhone, il n'y a pas de permission SMS.
+    if (phone.isNotEmpty) await NativeBridge.requestSmsPermission();
     await ref.read(settingsProvider.notifier).update((s) => s.copyWith(
           emergencyName: _name.text.trim(),
           emergencyPhone: phone,
@@ -97,7 +98,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     icon: Icons.my_location_rounded,
                     title: 'Ta position',
                     text: 'Pour enregistrer tes balades (même écran éteint), afficher ta position '
-                        'et la partager à tes potes, Cono Moto a besoin du GPS et des notifications.',
+                        'et la partager à tes potes, Cono Moto a besoin du GPS et des notifications.'
+                        '${NativeBridge.isIOS ? '\n\nSur iPhone, choisis « Lorsque l\'app est active » et garde '
+                            '« Position exacte » activée : la balade continue d\'être enregistrée écran verrouillé.' : ''}',
                     action: FilledButton.icon(
                       onPressed: _locationOk ? null : _askLocation,
                       icon: Icon(_locationOk ? Icons.check_circle : Icons.location_on_outlined),
@@ -119,8 +122,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   _Page(
                     icon: Icons.health_and_safety_rounded,
                     title: 'Si ça tourne mal',
-                    text: 'Si l\'app détecte une chute (choc violent puis immobilité) et que tu ne réponds '
-                        'pas en 60 s, elle envoie un SMS avec ta position à ton contact d\'urgence et alerte tes potes.',
+                    text: NativeBridge.canSendSmsAutomatically
+                        ? 'Si l\'app détecte une chute (choc violent puis immobilité) et que tu ne réponds '
+                            'pas en 60 s, elle envoie un SMS avec ta position à ton contact d\'urgence et alerte tes potes.'
+                        : 'Si l\'app détecte une chute (choc violent puis immobilité) et que tu ne réponds '
+                            'pas en 60 s, elle alerte tes potes et prépare un SMS avec ta position pour ton contact '
+                            'd\'urgence : sur iPhone, le SMS est préparé, il te reste à appuyer sur Envoyer '
+                            '(Apple interdit l\'envoi automatique).',
                     child: Column(
                       children: [
                         TextField(

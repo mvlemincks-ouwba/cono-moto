@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config.dart';
@@ -22,6 +21,8 @@ class SettingsScreen extends ConsumerWidget {
     final s = ref.watch(settingsProvider);
     final n = ref.read(settingsProvider.notifier);
     final scheme = Theme.of(context).colorScheme;
+    // iPhone : Apple interdit l'envoi automatique de SMS.
+    final smsAuto = NativeBridge.canSendSmsAutomatically;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Réglages')),
@@ -33,7 +34,10 @@ class SettingsScreen extends ConsumerWidget {
             SwitchListTile(
               secondary: const Icon(Icons.health_and_safety_outlined),
               title: const Text('Détection de chute'),
-              subtitle: const Text('Choc violent puis immobilité : compte à rebours, puis SMS à ton contact d\'urgence'),
+              subtitle: Text(smsAuto
+                  ? 'Choc violent puis immobilité : compte à rebours, puis SMS à ton contact d\'urgence'
+                  : 'Choc violent puis immobilité : compte à rebours, puis alerte aux potes et SMS prêt '
+                      'à envoyer à ton contact d\'urgence'),
               value: s.crashDetection,
               onChanged: (v) => n.update((x) => x.copyWith(crashDetection: v)),
             ),
@@ -52,13 +56,22 @@ class SettingsScreen extends ConsumerWidget {
             if (s.hasEmergencyContact)
               ListTile(
                 leading: const Icon(Icons.sms_outlined),
-                title: const Text('Envoyer un SMS de test'),
-                subtitle: const Text('Vérifie que l\'envoi automatique fonctionne'),
+                title: Text(smsAuto ? 'Envoyer un SMS de test' : 'Préparer un SMS de test'),
+                subtitle: Text(smsAuto
+                    ? 'Vérifie que l\'envoi automatique fonctionne'
+                    : 'Sur iPhone, le SMS est préparé : il te reste à appuyer sur Envoyer'),
                 onTap: () => _testSms(context, s),
               ),
           ]),
           const SectionHeader('Balade'),
           _Group(children: [
+            SwitchListTile(
+              secondary: const Icon(Icons.navigation_outlined),
+              title: const Text('Plan de navigation en roulant'),
+              subtitle: const Text('La balade s\'ouvre sur la carte façon GPS (sinon sur le compteur)'),
+              value: s.rideMapFirst,
+              onChanged: (v) => n.update((x) => x.copyWith(rideMapFirst: v)),
+            ),
             SwitchListTile(
               secondary: const Icon(Icons.record_voice_over_outlined),
               title: const Text('Guidage vocal'),
@@ -232,10 +245,14 @@ class SettingsScreen extends ConsumerWidget {
               decoration: const InputDecoration(labelText: 'Téléphone', hintText: '06 12 34 56 78'),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'En cas de chute détectée et sans réponse de ta part pendant 60 s, '
-              'un SMS avec ta position lui est envoyé automatiquement.',
-              style: TextStyle(fontSize: 13),
+            Text(
+              NativeBridge.canSendSmsAutomatically
+                  ? 'En cas de chute détectée et sans réponse de ta part pendant 60 s, '
+                      'un SMS avec ta position lui est envoyé automatiquement.'
+                  : 'En cas de chute détectée et sans réponse de ta part pendant 60 s, tes potes sont '
+                      'alertés et un SMS avec ta position est préparé pour ce contact. Sur iPhone, '
+                      'Apple interdit l\'envoi automatique : il te reste (ou à un témoin) à appuyer sur Envoyer.',
+              style: const TextStyle(fontSize: 13),
             ),
           ],
         ),
@@ -249,13 +266,35 @@ class SettingsScreen extends ConsumerWidget {
       await ref.read(settingsProvider.notifier).update(
             (x) => x.copyWith(emergencyName: name.text.trim(), emergencyPhone: phone.text.trim()),
           );
-      if (phone.text.trim().isNotEmpty) await Permission.sms.request();
+      // Android uniquement : sur iPhone, il n'y a pas de permission SMS.
+      if (phone.text.trim().isNotEmpty) await NativeBridge.requestSmsPermission();
     }
   }
 
   Future<void> _testSms(BuildContext context, AppSettings s) async {
-    final status = await Permission.sms.request();
-    if (!status.isGranted) {
+    if (!NativeBridge.canSendSmsAutomatically) {
+      // iPhone : Messages s'ouvre pré-rempli, comme en cas de vraie chute.
+      final r = await NativeBridge.composeSms(
+        s.emergencyPhone,
+        'Cono Moto : test du contact d\'urgence. Si je chute à moto, tu pourras recevoir un SMS avec ma position. '
+        'Tout va bien 🙂',
+      );
+      if (!context.mounted) return;
+      switch (r) {
+        case SmsComposeResult.sent:
+          showCmSnack(context, 'SMS de test envoyé ✅');
+        case SmsComposeResult.cancelled:
+          showCmSnack(context, 'SMS de test non envoyé');
+        case SmsComposeResult.failed:
+          showCmSnack(context, 'Échec de l\'envoi du SMS', error: true);
+        case SmsComposeResult.unavailable:
+          showCmSnack(context, 'Ce téléphone ne peut pas envoyer de SMS', error: true);
+        case SmsComposeResult.opened:
+          break;
+      }
+      return;
+    }
+    if (!await NativeBridge.requestSmsPermission()) {
       if (context.mounted) showCmSnack(context, 'Autorise l\'envoi de SMS pour la détection de chute.', error: true);
       return;
     }

@@ -108,6 +108,8 @@ jobs:
           body: |
             APK construit automatiquement depuis `main` (build ${{ github.run_number }}).
             Installe `cono-moto.apk` sur ton téléphone Android (autorise les sources inconnues).
+            iPhone : `cono-moto-unsigned.ipa` (ajouté par le build « IPA iPhone »), à installer avec
+            Sideloadly, voir la section « Installer sur iPhone » du README.
           files: cono-moto.apk
 
       - name: Release taguée

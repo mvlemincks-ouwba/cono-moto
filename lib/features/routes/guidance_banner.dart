@@ -5,7 +5,6 @@ import '../../core/format.dart';
 import '../../core/theme.dart';
 import '../../core/ui/widgets.dart';
 import '../../services/routing/guidance_engine.dart';
-import '../../services/routing/maneuver_kinds.dart';
 import 'guidance_controller.dart';
 import 'route_ui.dart';
 
@@ -98,12 +97,9 @@ class _NextManeuverPanel extends StatelessWidget {
     final next = snapshot.next;
     final dist = snapshot.distanceToNextM ?? 0;
     final soon = dist < 150;
-    final following = snapshot.following;
-    final showThen =
-        following != null &&
-        next != null &&
-        following.distanceAlongM - next.distanceAlongM < 300 &&
-        following.type != ManeuverKind.roundaboutExit;
+    // « puis … » : manœuvre rapprochée choisie par le moteur de guidage.
+    final following = snapshot.then;
+    final showThen = following != null && next != null;
     final street = next?.streetName;
 
     return GlassPanel(

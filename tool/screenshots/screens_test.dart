@@ -265,7 +265,7 @@ void main() {
   }
 
   testWidgets('01-compteur', (tester) async {
-    await shot(tester, '01-compteur', const RideScreen(), [
+    await shot(tester, '01-compteur', const RideScreen(initialLayout: HudLayout.gauges), [
       ridePlatformProvider.overrideWithValue(FakeRidePlatform()),
       defaultBikeProvider.overrideWithValue(null),
       rideControllerProvider.overrideWith(() => _FixedRide(RideSessionState(
