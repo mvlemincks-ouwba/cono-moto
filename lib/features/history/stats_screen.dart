@@ -117,8 +117,9 @@ class _StatsBody extends StatelessWidget {
           compact: true,
           children: [
             StatTile(
-              label: 'Freinages / 100 km',
+              label: 'Freinages',
               value: Fmt.number(s.hardBrakesPer100Km, decimals: 1),
+              unit: '/100 km',
               icon: Icons.warning_amber_rounded,
               compact: true,
             ),

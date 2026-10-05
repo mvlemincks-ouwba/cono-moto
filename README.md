@@ -3,6 +3,14 @@
 L'app Android gratuite pour les balades moto entre potes : trouver de belles routes, suivre sa trace,
 voir ses potes en direct, faire le plein au meilleur prix et savoir à quel point on penche.
 
+<p>
+  <img src="docs/screenshots/01-compteur.png" width="200" alt="Compteur en balade">
+  <img src="docs/screenshots/02-garage.png" width="200" alt="Garage">
+  <img src="docs/screenshots/03-historique.png" width="200" alt="Historique">
+  <img src="docs/screenshots/05-balades.png" width="200" alt="Balades à faire">
+  <img src="docs/screenshots/07-potes.png" width="200" alt="Potes">
+</p>
+
 ## Ce que fait l'app
 
 | | |
@@ -82,7 +90,7 @@ npm install -g firebase-tools
 firebase login
 cd firebase
 firebase use --add            # choisis ton projet
-firebase deploy --only hosting,database
+./deploy.sh                   # règles de sécurité + page de suivi
 ```
 
 Puis ajoute le secret `SHARE_VIEWER_URL` = `https://<projet>.web.app/live.html`.
@@ -114,6 +122,12 @@ flutter pub get
 flutter analyze
 flutter test
 flutter run --dart-define-from-file=build-config.json   # facultatif : clés en local
+```
+
+Captures d'écran (données fictives, polices Barlow à télécharger dans un dossier) :
+
+```bash
+flutter test tool/screenshots/screens_test.dart --update-goldens --dart-define=FONTS_DIR=/chemin/vers/polices
 ```
 
 `build-config.json` (non versionné) a le même format que celui généré par la CI :
