@@ -30,6 +30,7 @@ voir ses potes en direct, faire le plein au meilleur prix et savoir à quel poin
 | 📢 **Signalements** | Gravillons, contrôle, danger, huile… visibles par tes potes. |
 | 🏁 **Mode groupe** | Point de regroupement partagé, alerte quand un pote décroche. |
 | 🧾 **Partage des frais** | Façon Tricount : qui a payé quoi, qui doit combien à qui. |
+| 💡 **Boîte à idées** | Propose une idée ou signale un bug depuis l'app : ça part sur le Discord de la bande, les potes votent 👍, et c'est traité. |
 | 🔗 **Partage de position** | Lien web de suivi en direct pour quelqu'un qui n'a pas l'app (valable 1 h, 4 h ou 12 h). |
 | 🆘 **Détection de chute** | Choc violent puis immobilité → compte à rebours, puis SMS automatique avec ta position à ton contact d'urgence + alerte aux potes (sur iPhone, le SMS est préparé : il reste à appuyer sur Envoyer, [voir plus bas](#-iphone)). |
 | 📴 **Cartes hors-ligne** | Télécharge une zone ou le couloir d'une balade avant de partir en zone blanche. |
@@ -186,7 +187,39 @@ Détails dans [`firebase/README.md`](firebase/README.md).
 2. Soit tu ajoutes le secret GitHub `TOMTOM_API_KEY` (clé intégrée pour tous), soit chacun colle la clé dans
    l'app : **Garage › ⚙ Réglages › Trafic en temps réel › Clé TomTom**.
 
-### 4. (Facultatif) Ta propre clé de signature
+### 4. Boîte à idées sur Discord — gratuit
+
+Dans l'app (**Réglages › Communauté**, ou menu ⋮ de l'onglet Potes), chacun peut proposer une idée ou
+signaler un bug, avec une capture d'écran. Ça part dans un **salon forum Discord** : une demande = un fil,
+les potes en discutent et votent 👍. On peut aussi poster directement dans le forum.
+
+**a) Le salon et le webhook (pour l'app)**
+1. Sur ton serveur Discord, crée un salon de type **Forum**, par ex. `💡-idées` (tags facultatifs : « Idée », « Bug »).
+2. Paramètres du salon › **Intégrations › Webhooks › Nouveau webhook** › nomme-le « Cono Moto » › **Copier l'URL**.
+3. Secret GitHub **`DISCORD_FEEDBACK_WEBHOOK`** = cette URL.
+4. (Facultatif) Un lien d'invitation permanent au serveur → secret **`DISCORD_INVITE_URL`** (bouton « Rejoindre le Discord »).
+
+> L'URL du webhook est intégrée à l'app : quelqu'un qui décortique l'APK pourrait poster dans ce salon.
+> En cas d'abus, supprime le webhook, crée-en un autre et mets à jour le secret.
+
+**b) Le pont Discord → GitHub (pour que les demandes soient traitées)**
+
+Toutes les heures, le workflow « Boîte à idées » recopie chaque nouveau fil du forum en ticket GitHub
+(étiquette `feedback`), met à jour le nombre de 👍, reposte dans Discord les réponses écrites sur le ticket,
+et annonce « ✅ C'est fait » quand le ticket est fermé.
+1. <https://discord.com/developers/applications> › **New Application** « Cono Moto » › onglet **Bot** › **Reset Token** › copie le jeton
+   → secret **`DISCORD_BOT_TOKEN`**. Sur la même page, active **Message Content Intent**.
+2. Onglet **OAuth2 › URL Generator** : scope `bot`, permissions *View Channels*, *Read Message History*,
+   *Send Messages*, *Send Messages in Threads* › ouvre l'URL générée et ajoute le bot à ton serveur.
+3. Dans Discord : Paramètres utilisateur › Avancés › **Mode développeur** ; clic droit sur le forum › **Copier l'identifiant**
+   → secret **`DISCORD_FORUM_CHANNEL_ID`**.
+4. Test : onglet **Actions › Boîte à idées (Discord ↔ GitHub) › Run workflow**.
+
+**c) Le traitement** : chaque jour, une routine Claude Code lit les nouveaux tickets `feedback`, répond aux potes
+(sa réponse est repostée dans le fil Discord), et prépare une pull request pour ce qui est simple et clair.
+Tu n'as plus qu'à fusionner.
+
+### 5. (Facultatif) Ta propre clé de signature
 
 Par défaut, l'APK est signé avec la clé partagée `android/app/cono-shared.keystore` versionnée dans ce dépôt
 privé (pratique pour installer les mises à jour par-dessus). Pour utiliser ta propre clé, ajoute les secrets

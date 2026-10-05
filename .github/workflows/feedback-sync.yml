@@ -1,0 +1,45 @@
+name: Boîte à idées (Discord ↔ GitHub)
+
+# Toutes les heures : les nouveaux fils du forum Discord deviennent des tickets
+# GitHub (étiquette « feedback »), les réponses marquées <!-- pour-discord -->
+# sont repostées dans Discord, et la fermeture d'un ticket est annoncée.
+# Secrets requis : DISCORD_BOT_TOKEN, DISCORD_FORUM_CHANNEL_ID (voir README).
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+  issues:
+    types: [closed]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: feedback-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    name: Synchro Discord
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Sur un commentaire ou une fermeture, uniquement pour les tickets « feedback ».
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      contains(github.event.issue.labels.*.name, 'feedback')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tests du pont
+        run: python3 -m unittest discover -s tool/feedback
+
+      - name: Synchronisation
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_FORUM_CHANNEL_ID: ${{ secrets.DISCORD_FORUM_CHANNEL_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 tool/feedback/discord_sync.py

@@ -8,6 +8,8 @@ import '../../core/settings.dart';
 import '../../core/theme.dart';
 import '../../core/ui/widgets.dart';
 import '../../data/models/garage.dart';
+import '../../services/feedback/discord_feedback.dart';
+import '../feedback/feedback_screen.dart';
 import '../offline/offline_maps_screen.dart';
 
 /// Réglages de l'app.
@@ -195,6 +197,29 @@ class SettingsScreen extends ConsumerWidget {
               trailing: const Icon(Icons.edit_outlined),
               onTap: () => _editTomtomKey(context, ref),
             ),
+          ]),
+          const SectionHeader('Communauté'),
+          _Group(children: [
+            ListTile(
+              leading: const Icon(Icons.lightbulb_outline_rounded, color: CmColors.orange),
+              title: const Text('Proposer une idée'),
+              subtitle: const Text('Une fonction qui te manque ? Dis-le à la bande'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(FeedbackScreen.route()),
+            ),
+            ListTile(
+              leading: const Icon(Icons.bug_report_outlined),
+              title: const Text('Signaler un bug'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(FeedbackScreen.route(initialKind: FeedbackKind.bug)),
+            ),
+            if (AppConfig.discordInviteUrl.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.forum_outlined),
+                title: const Text('Rejoindre le Discord'),
+                trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                onTap: openDiscordInvite,
+              ),
           ]),
           const SectionHeader('À propos'),
           _Group(children: [

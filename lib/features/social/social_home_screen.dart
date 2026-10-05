@@ -12,6 +12,7 @@ import '../../data/models/shared.dart';
 import '../../services/social/social_api.dart';
 import 'expenses.dart';
 import 'social_models.dart';
+import '../feedback/feedback_screen.dart';
 import 'social_providers.dart';
 import 'social_sheets.dart';
 import 'ui/auth_screens.dart';
@@ -105,6 +106,8 @@ class _Dashboard extends ConsumerWidget {
                 onSelected: (v) async {
                   if (v == 'profile') {
                     await showEditProfileSheet(context, me);
+                  } else if (v == 'feedback') {
+                    await Navigator.of(context).push(FeedbackScreen.route());
                   } else if (v == 'logout') {
                     final ok = await confirmAction(
                       context,
@@ -117,6 +120,7 @@ class _Dashboard extends ConsumerWidget {
                 },
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'profile', child: ListTile(leading: Icon(Icons.edit_rounded), title: Text('Modifier mon profil'))),
+                  PopupMenuItem(value: 'feedback', child: ListTile(leading: Icon(Icons.lightbulb_outline_rounded), title: Text('Proposer une idée'))),
                   PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout_rounded), title: Text('Me déconnecter'))),
                 ],
               ),
