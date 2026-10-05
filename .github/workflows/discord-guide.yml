@@ -1,0 +1,52 @@
+name: Message Discord (mode d'emploi)
+
+# Ponctuel : publie docs/discord/mode-emploi.md dans le salon de la boîte à
+# idées, via le webhook DISCORD_FEEDBACK_WEBHOOK (nouveau fil si c'est un forum).
+on:
+  push:
+    branches: [claude/discord-guide]
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publication
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_FEEDBACK_WEBHOOK }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys, urllib.error, urllib.request
+          url = os.environ.get("WEBHOOK", "").strip()
+          if not url:
+              sys.exit("::error::Secret DISCORD_FEEDBACK_WEBHOOK absent")
+          ua = {"User-Agent": "DiscordBot (https://github.com/mvlemincks-ouwba/cono-moto, 1.0)"}
+
+          def call(method, target, body=None):
+              data = json.dumps(body).encode() if body is not None else None
+              req = urllib.request.Request(target, data=data, method=method, headers=ua)
+              if data is not None:
+                  req.add_header("Content-Type", "application/json")
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return json.loads(r.read() or b"null")
+
+          info = call("GET", url)
+          print("Webhook :", info.get("name"), "· salon", info.get("channel_id"), "· serveur", info.get("guild_id"))
+
+          lines = open("docs/discord/mode-emploi.md", encoding="utf-8").read().strip().splitlines()
+          title = lines[0].lstrip("# ").strip()
+          content = "\n".join(lines[1:]).strip()
+          payload = {"username": "Cono Moto", "content": content, "thread_name": title,
+                     "allowed_mentions": {"parse": []}}
+          try:
+              msg = call("POST", url + "?wait=true", payload)
+          except urllib.error.HTTPError as e:
+              if e.code != 400:
+                  raise
+              print("Salon texte (pas un forum) : publication sans fil")
+              payload.pop("thread_name")
+              payload["content"] = "**" + title + "**\n\n" + content
+              msg = call("POST", url + "?wait=true", payload)
+          print("Publié : message", msg.get("id"), "dans", msg.get("channel_id"))
+          PY
