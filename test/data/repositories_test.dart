@@ -28,6 +28,10 @@ void main() {
     expect(await repo.pointCount('r1'), 2);
     expect((await repo.points('r1')).first.leanDeg, -12);
     expect((await repo.list()).length, 1);
+    // Renommer ne doit pas effacer les points (piège du REPLACE + CASCADE).
+    await repo.upsert(loaded.copyWith(name: 'Vercors by night'));
+    expect((await repo.get('r1'))!.name, 'Vercors by night');
+    expect(await repo.pointCount('r1'), 2);
     await repo.delete('r1');
     expect(await repo.get('r1'), isNull);
     await db.close();

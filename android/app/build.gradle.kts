@@ -19,7 +19,8 @@ fun signingValue(propKey: String, envKey: String): String? =
 
 android {
     namespace = "fr.conomoto.cono_moto"
-    compileSdk = flutter.compileSdkVersion
+    // permission_handler_android 14.1 exige de compiler avec l'API 37.
+    compileSdk = maxOf(flutter.compileSdkVersion, 37)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

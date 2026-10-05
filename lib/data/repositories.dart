@@ -24,8 +24,12 @@ class RideRepository {
   Database get _d => _db.db;
   Stream<void> get changes => _changes.changes;
 
+  /// Crée ou met à jour une balade. Pas d'INSERT OR REPLACE ici : en SQLite,
+  /// REPLACE supprime la ligne et déclencherait le ON DELETE CASCADE des points.
   Future<void> upsert(Ride ride) async {
-    await _d.insert('rides', ride.toDb(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final row = ride.toDb();
+    final updated = await _d.update('rides', row, where: 'id = ?', whereArgs: [ride.id]);
+    if (updated == 0) await _d.insert('rides', row);
     _changes.notify();
   }
 
