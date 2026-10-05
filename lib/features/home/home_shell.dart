@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../garage/garage_screen.dart';
 import '../history/history_screen.dart';
+import '../history/ride_detail_screen.dart';
 import '../map/map_screen.dart';
 import '../ride/ride_controller.dart';
 import '../ride/ride_screen.dart';
@@ -29,11 +30,35 @@ class HomeTabs {
   static const garage = 4;
 }
 
-class HomeShell extends ConsumerWidget {
+class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeShell> createState() => _HomeShellState();
+}
+
+class _HomeShellState extends ConsumerState<HomeShell> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _recoverRide());
+  }
+
+  /// Balade interrompue (appli tuée, batterie à plat) : on la finalise.
+  Future<void> _recoverRide() async {
+    final ride = await ref.read(rideControllerProvider.notifier).recoverUnfinished();
+    if (ride == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Balade interrompue récupérée : « ${ride.name} »'),
+      action: SnackBarAction(
+        label: 'Voir',
+        onPressed: () => Navigator.of(context).push(RideDetailScreen.pageRoute(ride.id)),
+      ),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final index = ref.watch(homeTabProvider);
     final rideActive = ref.watch(rideControllerProvider.select((s) => s.isActive));
 
