@@ -39,6 +39,14 @@ jobs:
           content = "\n".join(lines[1:]).strip()
           payload = {"username": "Cono Moto", "content": content, "thread_name": title,
                      "allowed_mentions": {"parse": []}}
+          edit = "1556708255861051543"  # message déjà publié : on le corrige
+          if edit:
+              payload.pop("thread_name")
+              payload.pop("username")
+              payload["content"] = "**" + title + "**\n\n" + content
+              msg = call("PATCH", url + "/messages/" + edit, payload)
+              print("Modifié : message", msg.get("id"), "dans", msg.get("channel_id"))
+              sys.exit(0)
           try:
               msg = call("POST", url + "?wait=true", payload)
           except urllib.error.HTTPError as e:
