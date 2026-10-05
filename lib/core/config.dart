@@ -27,6 +27,18 @@ class AppConfig {
   /// URL de la page web de suivi en direct (ex : https://mon-projet.web.app/live.html).
   static const shareViewerUrl = String.fromEnvironment('SHARE_VIEWER_URL');
 
+  /// Webhook Discord où sont postées les idées et bugs envoyés depuis l'appli
+  /// (idéalement celui d'un salon « forum » : une demande = un fil).
+  static const discordFeedbackWebhook = String.fromEnvironment('DISCORD_FEEDBACK_WEBHOOK');
+
+  /// Lien d'invitation au serveur Discord (facultatif).
+  static const discordInviteUrl = String.fromEnvironment('DISCORD_INVITE_URL');
+
+  /// Numéro de build et commit (injectés par la CI, « dev » en local).
+  static const appVersion = '1.0.0';
+  static const appBuild = String.fromEnvironment('APP_BUILD', defaultValue: 'dev');
+  static const appCommit = String.fromEnvironment('APP_COMMIT');
+
   /// Identifiant de l'appli iOS (PRODUCT_BUNDLE_IDENTIFIER du projet Xcode).
   static const iosBundleId = 'fr.conomoto.conoMoto';
 
