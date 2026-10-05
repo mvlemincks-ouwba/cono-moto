@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/settings.dart';
 import 'core/theme.dart';
 import 'features/home/home_shell.dart';
+import 'features/onboarding/onboarding_screen.dart';
 
 /// Navigateur racine (utilisé pour afficher l'alerte de chute depuis n'importe où).
 final rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -15,6 +16,7 @@ class ConoMotoApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(settingsProvider.select((s) => s.themeMode));
+    final onboarded = ref.watch(settingsProvider.select((s) => s.onboardingDone));
     return MaterialApp(
       title: 'Cono Moto',
       debugShowCheckedModeBanner: false,
@@ -29,7 +31,7 @@ class ConoMotoApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: const HomeShell(),
+      home: onboarded ? const HomeShell() : const OnboardingScreen(),
     );
   }
 }

@@ -1,0 +1,118 @@
+name: APK Android
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Analyse, tests et APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          cache: true
+
+      - name: Dépendances
+        run: flutter pub get
+
+      - name: Analyse
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test
+
+      # Les clés sont lues dans les secrets du dépôt (Settings › Secrets and variables › Actions).
+      # Toutes sont optionnelles : sans Firebase, l'app fonctionne en solo.
+      - name: Configuration de build
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
+          FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
+          SHARE_VIEWER_URL: ${{ secrets.SHARE_VIEWER_URL }}
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          keys = ["FIREBASE_API_KEY", "FIREBASE_APP_ID", "FIREBASE_MESSAGING_SENDER_ID",
+                  "FIREBASE_PROJECT_ID", "FIREBASE_DATABASE_URL", "FIREBASE_STORAGE_BUCKET",
+                  "TOMTOM_API_KEY", "SHARE_VIEWER_URL"]
+          conf = {k: os.environ.get(k, "") for k in keys}
+          with open("build-config.json", "w") as f:
+              json.dump(conf, f)
+          print("Firebase configuré :", all(conf[k] for k in keys[:4]) and bool(conf["FIREBASE_DATABASE_URL"]))
+          print("TomTom configuré :", bool(conf["TOMTOM_API_KEY"]))
+          EOF
+
+      # Signature : clé fournie par les secrets si présente, sinon clé partagée du dépôt.
+      - name: Clé de signature
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "CM_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build APK
+        env:
+          CM_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          CM_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          CM_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          flutter build apk --release \
+            --build-number=${{ github.run_number }} \
+            --dart-define-from-file=build-config.json
+          cp build/app/outputs/flutter-apk/app-release.apk cono-moto.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cono-moto-apk
+          path: cono-moto.apk
+          retention-days: 30
+
+      # Sur la branche principale : met à jour la release « derniere-version »
+      # pour avoir un lien de téléchargement stable à partager.
+      - name: Release « derniere-version »
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: derniere-version
+          name: Cono Moto (dernière version)
+          prerelease: true
+          make_latest: false
+          body: |
+            APK construit automatiquement depuis `main` (build ${{ github.run_number }}).
+            Installe `cono-moto.apk` sur ton téléphone Android (autorise les sources inconnues).
+          files: cono-moto.apk
+
+      - name: Release taguée
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cono-moto.apk
+          generate_release_notes: true
