@@ -102,11 +102,15 @@ String _cut(String s, int max) => s.length <= max ? s : '${s.substring(0, max - 
 
 /// Construit le message Discord (webhook). Les mentions sont désactivées pour
 /// qu'un « @everyone » tapé par quelqu'un ne notifie pas tout le serveur.
+/// [heading] remplace « 💡 Idée : titre » comme titre et nom du fil (rapports
+/// de plantage : « 💥 Plantage : StateError »).
 Map<String, dynamic> buildDiscordPayload(
   FeedbackDraft d,
   FeedbackContext ctx, {
   bool forumThread = true,
   DateTime? now,
+  String? heading,
+  String footer = 'Envoyé depuis l\'appli Cono Moto',
 }) {
   final title = d.title.trim().replaceAll(RegExp(r'\s+'), ' ');
   final fields = <Map<String, dynamic>>[
@@ -120,15 +124,15 @@ Map<String, dynamic> buildDiscordPayload(
   final attachment = d.attachment;
   return {
     'username': 'Cono Moto',
-    if (forumThread) 'thread_name': _cut('${d.kind.emoji} $title', 100),
+    if (forumThread) 'thread_name': _cut(heading ?? '${d.kind.emoji} $title', 100),
     'allowed_mentions': {'parse': <String>[]},
     'embeds': [
       {
-        'title': _cut('${d.kind.emoji} ${d.kind.label} : $title', 256),
+        'title': _cut(heading ?? '${d.kind.emoji} ${d.kind.label} : $title', 256),
         'description': _cut(d.description.trim(), 4000),
         'color': d.kind.color & 0xFFFFFF,
         'fields': fields,
-        'footer': {'text': 'Envoyé depuis l\'appli Cono Moto'},
+        'footer': {'text': footer},
         'timestamp': (now ?? DateTime.now()).toUtc().toIso8601String(),
         if (attachment != null) 'image': {'url': 'attachment://${attachment.filename}'},
       },
@@ -161,15 +165,22 @@ class DiscordFeedbackClient {
   static bool isValidWebhook(String url) =>
       RegExp(r'^https://(?:(?:ptb|canary)\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+$').hasMatch(url.trim());
 
-  /// Publie le retour. Sur un salon forum, chaque retour ouvre un fil ; sur un
-  /// salon texte classique, Discord refuse `thread_name` : on renvoie sans.
+  /// Publie le retour.
   Future<void> send(FeedbackDraft draft, FeedbackContext ctx) async {
     if (!isConfigured) throw const FeedbackException('Le Discord n\'est pas encore branché sur cette version de l\'appli.');
     final error = draft.validate();
     if (error != null) throw FeedbackException(error);
-    var response = await _post(buildDiscordPayload(draft, ctx), draft.attachment);
-    if (response.statusCode == 400) {
-      response = await _post(buildDiscordPayload(draft, ctx, forumThread: false), draft.attachment);
+    await sendPayload(buildDiscordPayload(draft, ctx), attachment: draft.attachment);
+  }
+
+  /// Publie un message déjà construit (retour ou rapport de plantage). Sur un
+  /// salon forum, chaque message ouvre un fil ; sur un salon texte classique,
+  /// Discord refuse `thread_name` : on renvoie sans.
+  Future<void> sendPayload(Map<String, dynamic> payload, {FeedbackAttachment? attachment}) async {
+    if (!isConfigured) throw const FeedbackException('Le Discord n\'est pas encore branché sur cette version de l\'appli.');
+    var response = await _post(payload, attachment);
+    if (response.statusCode == 400 && payload.containsKey('thread_name')) {
+      response = await _post({...payload}..remove('thread_name'), attachment);
     }
     final code = response.statusCode;
     if (code >= 200 && code < 300) return;

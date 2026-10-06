@@ -36,6 +36,7 @@ voir ses potes en direct, faire le plein au meilleur prix et savoir à quel poin
 | 📟 **Compteur à ta façon** | Des vues compteur par activité (Balade, Piste, Trail, Tranquille… ou les tiennes) qu'on fait défiler en roulant ; tu choisis les infos affichées, dont le **cercle des G** (accélération, freinage, force en virage). |
 | 🔄 **Mises à jour automatiques** | Au démarrage, l'app te montre les nouveautés et se met à jour en un appui (Android). Sur iPhone, via SideStore sans ordinateur. |
 | 💡 **Boîte à idées** | Propose une idée ou signale un bug depuis l'app : ça part sur le Discord de la bande, les potes votent 👍, et c'est traité. |
+| 💥 **Rapports de plantage** | Si l'app plante, un rapport part tout seul sur le Discord (sans ta position ni ton nom : juste l'erreur et la version de l'appli) et devient un ticket à corriger. Désactivable dans Réglages › Communauté. |
 | 🔗 **Partage de position** | Lien web de suivi en direct pour quelqu'un qui n'a pas l'app (valable 1 h, 4 h ou 12 h). |
 | 🆘 **Détection de chute** | Choc violent puis immobilité → compte à rebours, puis SMS automatique avec ta position à ton contact d'urgence + alerte aux potes (sur iPhone, le SMS est préparé : il reste à appuyer sur Envoyer, [voir plus bas](#-iphone)). |
 | 📴 **Cartes hors-ligne** | Télécharge une zone ou le couloir d'une balade avant de partir en zone blanche. |
@@ -219,6 +220,15 @@ réponds dans le fil, pas dans le salon. Dans un **forum**, chaque post est déj
 
 > L'URL du webhook est intégrée à l'app : quelqu'un qui décortique l'APK pourrait poster dans ce salon.
 > En cas d'abus, supprime le webhook, crée-en un autre et mets à jour le secret.
+
+**Rapports de plantage** : le même webhook reçoit aussi, tout seul, un rapport « 💥 Plantage : … » quand
+l'app plante (versions publiées seulement). C'est un bug comme un autre (champ « Type » = Bug), donc il devient
+un ticket GitHub. Dedans : le type d'erreur, son message nettoyé (liens, positions, numéros, identifiants et
+textes saisis retirés), la pile d'appels, l'écran affiché et les versions de l'app et du téléphone ; jamais de
+position, de nom, de numéro ni d'identifiant Firebase. Anti-spam : une même erreur au plus une fois par semaine
+et 3 rapports par jour au maximum par téléphone ; les coupures réseau sont ignorées. Sans réseau, jusqu'à
+3 rapports attendent le démarrage suivant. Chacun peut les couper dans **Réglages › Communauté › Envoyer les
+rapports de plantage** (activé par défaut ; grisé si le webhook manque dans le build).
 
 **b) Le pont Discord → GitHub (pour que les demandes soient traitées)**
 

@@ -39,3 +39,5 @@ avec ton Apple ID :
 ## 💬 Une idée, un bug ?
 
 Dans l'appli : **Réglages › Communauté › Proposer une idée** ou **Signaler un bug**.
+Et si l'appli plante, un rapport part tout seul (sans ta position ni ton nom : juste l'erreur et la version
+de l'appli) ; tu peux le couper au même endroit.

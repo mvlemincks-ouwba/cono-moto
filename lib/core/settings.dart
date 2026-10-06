@@ -53,6 +53,7 @@ class AppSettings {
     this.onboardingDone = false,
     this.rideMapFirst = true,
     this.mapHighContrast = true,
+    this.crashReports = true,
   });
 
   final ThemeMode themeMode;
@@ -96,6 +97,9 @@ class AppSettings {
   /// (repérage des intersections en navigation de nuit).
   final bool mapHighContrast;
 
+  /// Envoyer un rapport sur le Discord quand l'appli plante (sans donnée perso).
+  final bool crashReports;
+
   /// Clé TomTom effective.
   String get effectiveTomtomKey =>
       tomtomApiKey.trim().isNotEmpty ? tomtomApiKey.trim() : AppConfig.tomtomApiKey;
@@ -123,6 +127,7 @@ class AppSettings {
     bool? onboardingDone,
     bool? rideMapFirst,
     bool? mapHighContrast,
+    bool? crashReports,
   }) =>
       AppSettings(
         themeMode: themeMode ?? this.themeMode,
@@ -145,6 +150,7 @@ class AppSettings {
         onboardingDone: onboardingDone ?? this.onboardingDone,
         rideMapFirst: rideMapFirst ?? this.rideMapFirst,
         mapHighContrast: mapHighContrast ?? this.mapHighContrast,
+        crashReports: crashReports ?? this.crashReports,
       );
 
   Map<String, Object> toPrefs() => {
@@ -168,6 +174,7 @@ class AppSettings {
         'onboardingDone': onboardingDone,
         'rideMapFirst': rideMapFirst,
         'mapHighContrast': mapHighContrast,
+        'crashReports': crashReports,
       };
 
   factory AppSettings.fromPrefs(SharedPreferences p) {
@@ -196,6 +203,7 @@ class AppSettings {
       onboardingDone: b('onboardingDone', d.onboardingDone),
       rideMapFirst: b('rideMapFirst', d.rideMapFirst),
       mapHighContrast: b('mapHighContrast', d.mapHighContrast),
+      crashReports: b('crashReports', d.crashReports),
     );
   }
 }
