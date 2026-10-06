@@ -320,4 +320,32 @@ void main() {
     expect(ride!.stats.hardBrakeCount, 1);
     await h.dispose();
   });
+
+  test('G en direct : freinage négatif, accélération positive, max et altitude', () async {
+    final h = await Harness.create();
+    await h.ctrl.start();
+    await h.ride(60, 15);
+    expect(h.state.longG, closeTo(0, 0.02));
+    expect(h.state.altitudeM, 300);
+
+    // Freinage : -8 km/h par seconde (≈ 0,23 G).
+    for (var v = 52.0; v >= 20; v -= 8) {
+      await h.ride(v, 1);
+    }
+    expect(h.state.longG, lessThan(-0.1));
+    expect(h.state.maxDecelG, greaterThan(0.15));
+
+    // Accélération : +7 km/h par seconde.
+    for (var v = 27.0; v <= 70; v += 7) {
+      await h.ride(v, 1);
+    }
+    expect(h.state.longG, greaterThan(0.1));
+    expect(h.state.maxAccelG, greaterThan(0.1));
+
+    // À l'arrêt, plus de G affiché.
+    await h.ride(5, 3);
+    expect(h.state.longG, 0);
+    await h.ctrl.stop(save: false);
+    await h.dispose();
+  });
 }
