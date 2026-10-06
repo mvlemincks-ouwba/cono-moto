@@ -1,13 +1,11 @@
-Salut Do(w)n Jones ! 👋 Merci pour ce retour, ça fait plaisir que l'appli te parle dès la première sortie 🙌
+Re-salut Do(w)n Jones ! 🌙 Bien vu pour le contraste, ta capture parle d'elle-même : de nuit, les rues autour du tracé se perdaient dans le fond.
 
-Tes 3 idées sont faites, d'un coup :
+C'est corrigé pour la carte sombre :
+• **les rues ressortent** en gris clair, d'autant plus clair que la route est importante (autoroute > nationale > petite route), et elles sont **plus larges** ;
+• **un liseré sombre** sur les bords pour bien détacher les intersections ;
+• **les noms de rue** sont plus lumineux ;
+• **le tracé orange** reste au-dessus et garde la vedette.
 
-**1. Des widgets au choix** : chaque vue du compteur choisit ses infos. Vitesse en grand, 1 ou 2 cadrans, et jusqu'à 9 tuiles parmi 14 (chrono, angles max, G max, G en direct, altitude, D+, heure, autonomie…).
+C'est activé d'office, et ça se coupe dans **Réglages › Carte › Rues bien visibles la nuit** si tu préfères l'ancien rendu.
 
-**2. Accélération et freinage en G** : nouveau **cercle des G** à côté de la jauge d'angle. Le point monte quand tu accélères, descend quand tu freines et part sur le côté en virage, avec tes max de la balade.
-
-**3. Des vues par activité** : 4 vues prêtes, 🛣️ Balade, 🏁 Piste, 🏔️ Trail et 😌 Tranquille, et tu peux créer les tiennes. En roulant, tu passes de l'une à l'autre d'un glissement de doigt ou avec les flèches.
-
-Pour personnaliser : **Réglages › Balade › Vues du compteur** (ou le bouton « … » pendant une balade).
-
-Ce sera dans la prochaine version de l'appli, je préviens ici dès qu'elle est dispo. Hâte d'avoir ton avis sur la vue Piste 🏁
+Ce sera dans la prochaine version, avec le compteur personnalisable. Dis-moi au prochain roulage de nuit si c'est assez lisible ou s'il faut pousser encore 🏍️
