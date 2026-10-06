@@ -143,6 +143,12 @@ BOT_MESSAGE = {"id": "630", "type": 0, "author": {"id": "8", "username": "ConoBo
 
 
 class TextChannelLogicTest(unittest.TestCase):
+    def test_after_cutoff(self):
+        self.assertTrue(ds.after_cutoff("620", None))
+        self.assertTrue(ds.after_cutoff("620", "610"))
+        self.assertFalse(ds.after_cutoff("610", "610"))
+        self.assertFalse(ds.after_cutoff("600", "610"))
+
     def test_channel_id_from_env(self):
         self.assertEqual(ds.channel_id_from({"DISCORD_FORUM_CHANNEL_ID": "42", "DISCORD_CHANNEL_ID": "77"}), "42")
         self.assertEqual(ds.channel_id_from({"DISCORD_FORUM_CHANNEL_ID": " ", "DISCORD_CHANNEL_ID": "77 "}), "77")
@@ -163,6 +169,11 @@ class TextChannelLogicTest(unittest.TestCase):
             {"id": "1", "author": {"id": "4"}, "content": "", "attachments": [{"url": "https://cdn/x.png"}]}, "8"))
         self.assertTrue(ds.is_request_message(MANUAL_MESSAGE, None))
         self.assertFalse(ds.is_request_message(PINNED_MESSAGE, "8"))
+        # Annonce postée par le webhook sans la fiche de l'appli : pas une demande.
+        announce = {"id": "640", "type": 0, "webhook_id": "1", "author": WEBHOOK, "content": "Salut ! Tes idées sont faites."}
+        self.assertFalse(ds.is_request_message(announce, "8"))
+        self.assertTrue(ds.is_app_post(APP_MESSAGE))
+        self.assertFalse(ds.is_app_post(announce))
         self.assertFalse(ds.is_request_message(BOT_MESSAGE, "8"))
         self.assertFalse(ds.is_request_message(dict(BOT_MESSAGE, author={"id": "8"}), "8"))
         self.assertFalse(ds.is_request_message(dict(BOT_MESSAGE, author={"id": "9", "bot": True}), "8"))
@@ -385,6 +396,14 @@ class TextChannelTest(unittest.TestCase):
         with mock.patch.dict(os.environ, self.ENV), mock.patch.object(ds, "Http", api.http), \
                 mock.patch("builtins.print"):
             return ds.main()
+
+    def test_messages_before_cutoff_ignored(self):
+        api = FakeTextApi()
+        env = {**self.ENV, "DISCORD_SINCE_ID": "615"}
+        with mock.patch.dict(os.environ, env), mock.patch.object(ds, "Http", api.http), mock.patch("builtins.print"):
+            self.assertEqual(ds.main(), 0)
+        self.assertEqual([m for m, _ in api.opened], ["620"])
+        self.assertEqual(len(api.issues), 1)
 
     def test_text_channel(self):
         api = FakeTextApi()

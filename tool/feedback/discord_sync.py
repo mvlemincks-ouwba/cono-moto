@@ -117,9 +117,29 @@ def is_request_message(msg: dict | None, bot_user_id: str | None) -> bool:
         return False
     if author.get("bot") and not msg.get("webhook_id"):
         return False
+    if msg.get("webhook_id") and not is_app_post(msg):
+        # Webhook sans la fiche de l'appli : annonce postée par Marc (mode
+        # d'emploi, réponse, nouvelle version…), pas une demande.
+        return False
     if msg.get("type", 0) not in (0, 19):
         return False
     return bool((msg.get("content") or "").strip() or msg.get("embeds") or msg.get("attachments"))
+
+
+def is_app_post(msg: dict) -> bool:
+    """Demande envoyée depuis l'appli : un embed avec le champ « Type »."""
+    return any(f.get("name") == "Type" for e in msg.get("embeds") or [] for f in e.get("fields") or [])
+
+
+def after_cutoff(message_id: str, since_id: str | None) -> bool:
+    """Message postérieur à DISCORD_SINCE_ID (les plus anciens sont ignorés :
+    tout ce qui a été posté avant la mise en route du bot)."""
+    if not since_id:
+        return True
+    try:
+        return int(message_id) > int(since_id)
+    except ValueError:
+        return True
 
 
 def needs_thread(msg: dict, bot_user_id: str | None) -> bool:
@@ -331,6 +351,7 @@ class Http:
 def main() -> int:
     token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
     salon = channel_id_from(os.environ)
+    since = os.environ.get("DISCORD_SINCE_ID", "").strip() or None
     gh_token = os.environ.get("GITHUB_TOKEN", "").strip()
     repo = os.environ.get("GITHUB_REPOSITORY", "").strip()
     if not token or not salon:
@@ -384,7 +405,7 @@ def main() -> int:
         bot_id = (discord.call("GET", "/users/@me") or {}).get("id")
         recent = discord.call("GET", f"/channels/{salon}/messages?limit=100") or []
         for m in sorted(recent, key=lambda m: int(m["id"])):
-            if m["id"] in by_thread or not needs_thread(m, bot_id):
+            if m["id"] in by_thread or not after_cutoff(m["id"], since) or not needs_thread(m, bot_id):
                 continue
             name = thread_title(m)
             try:
@@ -419,7 +440,7 @@ def main() -> int:
             votes = votes_of(starter)
             issue = by_thread.get(tid)
             if issue is None:
-                if text_mode and not is_request_message(starter, bot_id):
+                if text_mode and (not after_cutoff(tid, since) or not is_request_message(starter, bot_id)):
                     # Fil ouvert à la main sous un message qui n'est pas une demande
                     # (le « Comment ça marche » épinglé…) ou sans message de départ.
                     continue

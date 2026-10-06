@@ -222,6 +222,10 @@ reposte dans Discord les réponses écrites sur le ticket, et annonce « ✅ C'e
    → secret **`DISCORD_FORUM_CHANNEL_ID`** (même nom pour un salon texte ; **`DISCORD_CHANNEL_ID`** marche aussi).
 4. Test : onglet **Actions › Boîte à idées (Discord ↔ GitHub) › Run workflow**.
 
+Les messages postés par le webhook sans la fiche de l'appli (mode d'emploi, réponses, annonces) ne deviennent
+jamais des demandes, et dans un salon texte les messages antérieurs à `DISCORD_SINCE_ID` (variable du dépôt,
+réglée dans le workflow sur la mise en route du bot) sont ignorés.
+
 **c) Le traitement** : chaque matin, une routine Claude Code lit les nouveaux tickets `feedback` (et les réponses
 aux questions qu'elle a posées), répond aux potes (sa réponse est repostée dans le fil Discord), trie avec les
 étiquettes `accepté` / `à-préciser` / `à-discuter` / `pas-prévu`, et prépare une pull request pour ce qui est
