@@ -48,6 +48,12 @@ class Fmt {
 
   static String speed(double kmh) => '${_dec0.format(kmh)} km/h';
 
+  /// Taille de fichier « 850 Ko » ou « 1,2 Mo ».
+  static String fileSize(int bytes) {
+    if (bytes < 1024 * 1024) return '${_dec0.format((bytes / 1024).ceil())} Ko';
+    return '${_dec1.format(bytes / (1024 * 1024))} Mo';
+  }
+
   static String date(DateTime d) => DateFormat('d MMM yyyy', 'fr_FR').format(d.toLocal());
 
   static String dateLong(DateTime d) => DateFormat('EEEE d MMMM yyyy', 'fr_FR').format(d.toLocal());
