@@ -8,6 +8,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import '../geo.dart';
 import '../location.dart';
 import '../settings.dart';
+import 'contrast_style.dart';
 import 'map_models.dart';
 import 'marker_renderer.dart';
 
@@ -167,6 +168,9 @@ class CmMap extends ConsumerStatefulWidget {
 
   /// Centre par défaut : France.
   static const defaultCenter = GeoPoint(46.6, 2.4);
+
+  /// Fond affiché le temps de préparer le style (fraction de seconde).
+  static const loadingColor = Color(0xFF0E1116);
 
   @override
   ConsumerState<CmMap> createState() => _CmMapState();
@@ -463,12 +467,17 @@ class _CmMapState extends ConsumerState<CmMap> {
   Widget build(BuildContext context) {
     final mapStyle = ref.watch(settingsProvider.select((s) => s.mapStyle));
     final styleUrl = mapStyle.resolve(Theme.of(context).brightness);
+    // Carte sombre contrastée : fichier de style préparé (en cache, quasi
+    // immédiat) ; en cas d'échec, le style d'origine.
+    final source = ref.watch(mapStyleSourceProvider(styleUrl));
+    final styleString = source.value ?? (source.hasError ? styleUrl : null);
+    if (styleString == null) return const ColoredBox(color: CmMap.loadingColor);
     final center = widget.initialCenter ?? ref.read(positionHubProvider)?.point ?? CmMap.defaultCenter;
     final zoom = widget.initialCenter == null && ref.read(positionHubProvider) == null ? 5.2 : widget.initialZoom;
     final showLoc = widget.showUserLocation && _locationGranted;
 
     final map = MapLibreMap(
-      styleString: styleUrl,
+      styleString: styleString,
       initialCameraPosition: CameraPosition(target: LatLng(center.lat, center.lng), zoom: zoom),
       onMapCreated: (c) {
         _controller = c;
