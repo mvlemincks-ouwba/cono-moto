@@ -6,6 +6,8 @@ Cette page propose toujours **la dernière version**, publiée automatiquement (
 ## 🤖 Android
 
 1. Sur ton téléphone, télécharge **[cono-moto.apk](https://github.com/{{REPO}}/releases/download/derniere-version/cono-moto.apk)**.
+   Vieux téléphone (32 bits) : si Android refuse de l'installer, prends plutôt
+   **[cono-moto-armeabi-v7a.apk](https://github.com/{{REPO}}/releases/download/derniere-version/cono-moto-armeabi-v7a.apk)**.
 2. Ouvre le fichier. Android demande d'autoriser l'installation depuis ton navigateur : accepte.
 3. C'est tout. **Les mises à jour arrivent ensuite toutes seules** : au démarrage, l'appli te montre
    ce qui a changé et s'installe en un appui sur « Mettre à jour ». La première fois, Android te demande

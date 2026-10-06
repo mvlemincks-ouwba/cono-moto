@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -40,6 +41,54 @@ void main() {
       expect(() => UpdateManifest.fromJson({...manifestJson(), 'build': '57'}), throwsFormatException);
       expect(() => UpdateManifest.fromJson({...manifestJson(), 'file': '../x.apk'}), throwsFormatException);
       expect(() => UpdateManifest.fromJson({...manifestJson(), 'platform': 'windows'}), throwsFormatException);
+    });
+
+    test('APK par architecture (files), absents des descriptions d\'avant', () {
+      expect(UpdateManifest.fromJson(manifestJson()).files, isEmpty);
+      final m = UpdateManifest.fromJson({
+        ...manifestJson(size: 40),
+        'files': {
+          'arm64-v8a': {'file': 'cono-moto.apk', 'size': 40},
+          'armeabi-v7a': {'file': 'cono-moto-armeabi-v7a.apk', 'size': 35},
+        },
+      });
+      expect(m.files.keys, ['arm64-v8a', 'armeabi-v7a']);
+      expect((m.files['armeabi-v7a']!.name, m.files['armeabi-v7a']!.size), ('cono-moto-armeabi-v7a.apk', 35));
+
+      for (final files in [
+        {'armeabi-v7a': {'file': '../x.apk', 'size': 1}},
+        {'armeabi-v7a': {'file': '', 'size': 1}},
+        {'armeabi-v7a': {'size': 1}},
+        {'armeabi-v7a': 'cono-moto-armeabi-v7a.apk'},
+        ['cono-moto.apk'],
+      ]) {
+        expect(() => UpdateManifest.fromJson({...manifestJson(), 'files': files}), throwsFormatException,
+            reason: '$files');
+      }
+    });
+
+    test('choix de l\'APK selon les architectures du téléphone', () {
+      final m = UpdateManifest.fromJson({
+        ...manifestJson(size: 40),
+        'files': {
+          'arm64-v8a': {'file': 'cono-moto.apk', 'size': 40},
+          'armeabi-v7a': {'file': 'cono-moto-armeabi-v7a.apk', 'size': 35},
+        },
+      });
+      String pick(List<String> abis) {
+        final p = m.forAbis(abis);
+        expect((p.build, p.notes, p.files), (m.build, m.notes, m.files), reason: 'même version');
+        return '${p.file} ${p.size}';
+      }
+
+      expect(pick(['arm64-v8a', 'armeabi-v7a', 'armeabi']), 'cono-moto.apk 40');
+      expect(pick(['armeabi-v7a', 'armeabi']), 'cono-moto-armeabi-v7a.apk 35', reason: 'vieux téléphone 32 bits');
+      expect(pick(['x86_64', 'arm64-v8a']), 'cono-moto.apk 40', reason: 'architecture non publiée sautée');
+      expect(pick(['x86_64']), 'cono-moto.apk 40', reason: 'rien ne correspond : file');
+      expect(pick([]), 'cono-moto.apk 40', reason: 'architectures inconnues : file');
+
+      final old = UpdateManifest.fromJson(manifestJson());
+      expect(identical(old.forAbis(['armeabi-v7a']), old), isTrue, reason: 'description d\'avant : file');
     });
   });
 
@@ -116,6 +165,56 @@ void main() {
         expect(asked, hasLength(1));
       });
 
+      test('fichier complet déjà là : réutilisé (taille vérifiée)', () async {
+        final m = UpdateManifest.fromJson(manifestJson());
+        final asked = <Uri>[];
+        final client = UpdateClient(baseUrl: base, client: streaming([[1, 2, 3, 4, 5, 6]], asked: asked));
+        expect(client.downloaded(m, dir), isNull);
+        File('${dir.path}/57-cono-moto.apk').writeAsBytesSync([1, 2, 3]);
+        expect(client.downloaded(m, dir), isNull, reason: 'taille différente');
+
+        File('${dir.path}/57-cono-moto.apk').writeAsBytesSync([9, 9, 9, 9, 9, 9]);
+        expect(client.downloaded(m, dir)?.path, endsWith('57-cono-moto.apk'));
+        final file = await client.download(m, dir);
+        expect(file.readAsBytesSync(), [9, 9, 9, 9, 9, 9]);
+        expect(asked, isEmpty);
+      });
+
+      test('arrêté en route (keepGoing) : erreur et rien ne reste', () async {
+        final chunks = StreamController<List<int>>();
+        final client = UpdateClient(
+          baseUrl: base,
+          client: MockClient.streaming((_, _) async => http.StreamedResponse(chunks.stream, 200)),
+        );
+        var go = true;
+        final done = client.download(UpdateManifest.fromJson(manifestJson()), dir, keepGoing: () => go);
+        await pumpEventQueue();
+        chunks.add([1, 2, 3]);
+        await pumpEventQueue();
+        expect(dir.listSync().map((f) => f.path.split('/').last), ['57-cono-moto.apk.part']);
+        go = false;
+        chunks.add([4, 5, 6]);
+        await expectLater(done, throwsA(isA<UpdateException>().having((e) => e.message, 'message', contains('arrêté'))));
+        expect(dir.listSync(), isEmpty);
+        await chunks.close();
+      });
+
+      test('connexion coupée en route : fichier partiel supprimé', () async {
+        final chunks = StreamController<List<int>>();
+        final client = UpdateClient(
+          baseUrl: base,
+          client: MockClient.streaming((_, _) async => http.StreamedResponse(chunks.stream, 200)),
+        );
+        final done = client.download(UpdateManifest.fromJson(manifestJson()), dir);
+        await pumpEventQueue();
+        chunks.add([1, 2, 3]);
+        await pumpEventQueue();
+        chunks.addError(const SocketException('coupé'));
+        await expectLater(done, throwsA(isA<UpdateException>().having((e) => e.message, 'message', contains('interrompu'))));
+        expect(dir.listSync(), isEmpty);
+        await chunks.close();
+      });
+
       test('fichier incomplet : erreur et rien ne reste', () async {
         final client = UpdateClient(baseUrl: base, client: streaming([[1, 2, 3]]));
         await expectLater(
@@ -180,6 +279,35 @@ void main() {
       expect(events.last.message, 'Pas assez de place sur le téléphone.');
       await sub.cancel();
       installer.dispose();
+    });
+
+    test('architectures et type de connexion, prudents si Android ne répond pas', () async {
+      final installer = ApkInstaller(channel: channel);
+      final calls = <String>[];
+      Object? unmetered = true;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call.method);
+        return switch (call.method) {
+          'supportedAbis' => ['arm64-v8a', 'armeabi-v7a', 'armeabi'],
+          'isNetworkUnmetered' => unmetered,
+          _ => null,
+        };
+      });
+      expect(await installer.supportedAbis(), ['arm64-v8a', 'armeabi-v7a', 'armeabi']);
+      expect(await installer.supportedAbis(), hasLength(3));
+      expect(calls.where((m) => m == 'supportedAbis'), hasLength(1), reason: 'gardées en mémoire');
+      expect(await installer.isNetworkUnmetered(), isTrue);
+      unmetered = false;
+      expect(await installer.isNetworkUnmetered(), isFalse);
+      unmetered = null;
+      expect(await installer.isNetworkUnmetered(), isFalse, reason: 'inconnu : comme les données mobiles');
+
+      messenger.setMockMethodCallHandler(channel, (_) async => throw PlatformException(code: 'X'));
+      expect(await installer.isNetworkUnmetered(), isFalse);
+      expect(await ApkInstaller(channel: channel).supportedAbis(), isEmpty);
+      messenger.setMockMethodCallHandler(channel, null);
+      expect(await installer.isNetworkUnmetered(), isFalse);
+      expect(await ApkInstaller(channel: channel).supportedAbis(), isEmpty);
     });
 
     test('messages d\'échec', () {
