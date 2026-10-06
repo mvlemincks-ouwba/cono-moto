@@ -172,6 +172,20 @@ void main() {
       expect(find.text('Bien roulé !'), findsOneWidget);
       await tester.dragUntilVisible(find.text('47°'), find.byType(ListView), const Offset(0, -150));
       await tester.dragUntilVisible(find.text('Voir le détail'), find.byType(ListView), const Offset(0, -150));
+      await tester.dragUntilVisible(find.text("Partager l'image"), find.byType(ListView), const Offset(0, -150));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('récapitulatif : image d’une balade trop courte · ${entry.key}', (tester) async {
+      final ride = Ride(id: 'r', name: 'Essai parking', startedAt: DateTime.utc(2026, 6, 7, 7));
+      await _pumpApp(tester, RideSummaryScreen(ride: ride), size: entry.value);
+      final share = find.text("Partager l'image");
+      await tester.dragUntilVisible(share, find.byType(ListView), const Offset(0, -150));
+      await tester.tap(share);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.textContaining('trop courte pour en faire une image'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('alerte chute · ${entry.key}', (tester) async {

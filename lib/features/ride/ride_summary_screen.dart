@@ -3,11 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../core/ui/widgets.dart';
+import '../../data/models/garage.dart';
 import '../../data/models/ride.dart';
 import '../../services/ride/ride_store.dart';
 import '../history/ride_detail_screen.dart';
+import '../history/ride_share_card.dart';
 import 'ride_screen.dart';
 import 'widgets/lean_gauge.dart';
 
@@ -25,6 +28,32 @@ class RideSummaryScreen extends ConsumerStatefulWidget {
 
 class _RideSummaryScreenState extends ConsumerState<RideSummaryScreen> {
   late Ride _ride = widget.ride;
+  bool _sharing = false;
+
+  /// Image de la balade à poster (trace complète pour la colorer par l'angle).
+  Future<void> _shareImage() async {
+    if (_sharing) return;
+    setState(() => _sharing = true);
+    try {
+      final r = _ride;
+      var track = const <TrackPoint>[];
+      Bike? bike;
+      try {
+        track = await ref.read(rideRepositoryProvider).points(r.id);
+      } catch (_) {
+        // Pas de points : l'aperçu enregistré avec la balade suffit.
+      }
+      if (r.bikeId != null) {
+        try {
+          bike = (await ref.read(bikesProvider.future)).where((b) => b.id == r.bikeId).firstOrNull;
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      await shareRideCard(context, ride: r, track: track, bike: bike);
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
 
   Future<void> _rename() async {
     final controller = TextEditingController(text: _ride.name);
@@ -216,6 +245,17 @@ class _RideSummaryScreenState extends ConsumerState<RideSummaryScreen> {
                     onPressed: () => Navigator.of(context).pushReplacement(RideDetailScreen.pageRoute(r.id)),
                     icon: const Icon(Icons.insights_rounded),
                     label: const Text('Voir le détail', style: TextStyle(fontSize: 17)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 56,
+                  child: OutlinedButton.icon(
+                    onPressed: _sharing ? null : _shareImage,
+                    icon: _sharing
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.4))
+                        : const Icon(Icons.image_outlined),
+                    label: const Text("Partager l'image"),
                   ),
                 ),
                 const SizedBox(height: 10),

@@ -8,6 +8,7 @@ voir ses potes en direct, faire le plein au meilleur prix et savoir à quel poin
   <img src="docs/screenshots/09-compteur-piste.png" width="200" alt="Vue compteur Piste avec le cercle des G">
   <img src="docs/screenshots/02-garage.png" width="200" alt="Garage">
   <img src="docs/screenshots/03-historique.png" width="200" alt="Historique">
+  <img src="docs/screenshots/10-carte-partage.png" width="200" alt="Image de balade à partager">
   <img src="docs/screenshots/05-balades.png" width="200" alt="Balades à faire">
   <img src="docs/screenshots/07-potes.png" width="200" alt="Potes">
 </p>
@@ -22,6 +23,7 @@ voir ses potes en direct, faire le plein au meilleur prix et savoir à quel poin
 | 📐 **Angle d'inclinaison** | Jauge en direct, angle max gauche/droite, répartition des angles (téléphone fixé sur le guidon). |
 | 📊 **Stats** | Vitesse moyenne/max, freinages et accélérations forts, D+, nombre de virages, records, km par mois. |
 | 🕓 **Historique** | Toutes tes balades avec carte, graphes vitesse/angle, coût de la balade, « refaire cette balade ». |
+| 📸 **Image à partager** | Après la balade (ou depuis l'historique), une belle image à poster sur WhatsApp ou Instagram : ta trace colorée selon l'angle, km, temps, vitesses, angles max, D+ et virages. Marche même hors ligne. |
 | ⛽ **Essence** | Stations autour de toi ou le long de l'itinéraire avec le **prix du moment** (données officielles prix-carburants.gouv.fr), la moins chère mise en avant, prix affichés directement sur la carte. |
 | 💶 **Coût des balades** | Pleins, péages, restos… coût par balade, coût au km, conso calculée automatiquement. |
 | 🛢️ **Autonomie** | Estimation des km restants dans le réservoir, alerte avant la panne sèche avec les stations sur ta route. |

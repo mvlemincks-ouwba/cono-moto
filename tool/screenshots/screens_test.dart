@@ -2,6 +2,8 @@
 // Génère des captures d'écran (hors suite de tests) :
 //   flutter test tool/screenshots/screens_test.dart --update-goldens
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:cono_moto/core/geo.dart';
 import 'package:cono_moto/core/providers.dart';
@@ -17,6 +19,7 @@ import 'package:cono_moto/features/fuel/fuel_ui.dart';
 import 'package:cono_moto/features/garage/autonomy.dart';
 import 'package:cono_moto/features/garage/garage_screen.dart';
 import 'package:cono_moto/features/history/history_screen.dart';
+import 'package:cono_moto/features/history/ride_share_card.dart';
 import 'package:cono_moto/features/history/stats_screen.dart';
 import 'package:cono_moto/features/onboarding/onboarding_screen.dart';
 import 'package:cono_moto/features/ride/ride_controller.dart';
@@ -93,6 +96,28 @@ List<TrackPoint> _track(DateTime t0) => [
           altitude: 300 + 600 * (i / 900) + 40 * ((i % 100) / 100),
         ),
     ];
+
+/// Boucle presque fermée avec des lacets côté montagne (pour la carte à partager).
+List<TrackPoint> _cardTrack(DateTime t0) {
+  const n = 4000;
+  return [
+    for (var i = 0; i < n; i++)
+      () {
+        final th = 1.9 * math.pi * i / n;
+        final mountain = math.max(0.0, math.sin(th - math.pi / 3));
+        final hairpin = math.sin(th * 46);
+        final r = 0.16 * (1 + 0.22 * math.sin(2 * th + 0.6) + 0.1 * math.sin(3 * th + 1.4)) + 0.012 * mountain * hairpin;
+        return TrackPoint(
+          time: t0.add(Duration(seconds: i * 3)),
+          lat: 45.0 + r * math.sin(th),
+          lng: 5.55 + r * math.cos(th) / math.cos(45 * math.pi / 180),
+          speedMs: 22 - 8 * mountain,
+          leanDeg: (6 + 44 * mountain) * hairpin,
+          altitude: 400 + 900 * mountain,
+        );
+      }(),
+  ];
+}
 
 Future<void> _seed(GarageRepository garage, RideRepository rides, RouteRepository routes) async {
   final now = DateTime.now().toUtc();
@@ -416,5 +441,37 @@ void main() {
 
   testWidgets('08-accueil', (tester) async {
     await shot(tester, '08-accueil', const OnboardingScreen(), []);
+  });
+
+  // Image de balade à partager, dessinée à mi-taille (540 × 675).
+  testWidgets('10-carte-partage', (tester) async {
+    final start = now.subtract(const Duration(days: 2, hours: 4));
+    final ride = Ride(
+      id: 'r0',
+      name: 'Tour du Vercors par les gorges',
+      startedAt: start,
+      endedAt: start.add(const Duration(hours: 3, minutes: 35)),
+      stats: const RideStats(
+        distanceM: 182400,
+        movingTimeS: 11320,
+        totalTimeS: 12900,
+        maxSpeedKmh: 128,
+        maxLeanLeftDeg: 47,
+        maxLeanRightDeg: 44,
+        elevationGainM: 1840,
+        curveCount: 304,
+      ),
+    );
+    final content = buildRideCardContent(
+      ride,
+      track: _cardTrack(start),
+      bike: const Bike(id: 'b1', name: 'La Tracer', colorValue: 0xFF4EA8FF),
+    );
+    final image = await tester.runAsync(() {
+      final recorder = ui.PictureRecorder();
+      paintRideCard(Canvas(recorder)..scale(0.5), content);
+      return recorder.endRecording().toImage(540, 675);
+    });
+    await expectLater(image!, matchesGoldenFile('out/10-carte-partage.png'));
   });
 }
