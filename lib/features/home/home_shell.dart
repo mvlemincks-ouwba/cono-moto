@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -73,7 +75,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     if (ref.read(rideControllerProvider).isActive) return;
     final updates = ref.read(appUpdateProvider.notifier);
     final found = await updates.check();
-    if (found == null || !mounted || !updates.shouldPrompt(found)) return;
+    if (found == null || !mounted) return;
+    // En Wi-Fi, elle se télécharge en douce : « Mettre à jour » l'installera tout de suite.
+    unawaited(updates.preDownload());
+    if (!updates.shouldPrompt(found)) return;
     if (ref.read(rideControllerProvider).isActive || ModalRoute.of(context)?.isCurrent != true) return;
     _updatePrompted = true;
     try {

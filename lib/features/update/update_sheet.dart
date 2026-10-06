@@ -116,6 +116,13 @@ class _AndroidActions extends ConsumerWidget {
           if (state.phase == UpdatePhase.error && state.message.isNotEmpty) ...[
             Text(state.message, style: TextStyle(color: scheme.error)),
             const SizedBox(height: 12),
+          ] else if (state.downloaded) ...[
+            Row(children: [
+              Icon(Icons.download_done_rounded, color: scheme.primary, size: 20),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('Déjà téléchargée, l\'installation prend quelques secondes')),
+            ]),
+            const SizedBox(height: 12),
           ],
           FilledButton.icon(
             onPressed: controller.downloadAndInstall,
@@ -161,8 +168,8 @@ Future<void> _later(BuildContext context, WidgetRef ref) async {
   if (context.mounted) Navigator.of(context).pop();
 }
 
-/// Lignes du réglage « Mises à jour » : version installée, recherche manuelle
-/// et vérification automatique.
+/// Lignes du réglage « Mises à jour » : version installée, recherche manuelle,
+/// vérification automatique et téléchargement en Wi-Fi (Android).
 class UpdateSettingsTiles extends ConsumerWidget {
   const UpdateSettingsTiles({super.key});
 
@@ -170,6 +177,7 @@ class UpdateSettingsTiles extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(appUpdateProvider);
     final controller = ref.read(appUpdateProvider.notifier);
+    final android = ref.watch(updatePlatformProvider) == UpdatePlatform.android;
     final manifest = state.manifest;
     final String subtitle = switch (state.phase) {
       UpdatePhase.checking => 'Recherche d\'une nouvelle version…',
@@ -202,6 +210,15 @@ class UpdateSettingsTiles extends ConsumerWidget {
         value: state.autoCheck,
         onChanged: controller.setAutoCheck,
       ),
+      if (android)
+        SwitchListTile(
+          secondary: const Icon(Icons.wifi_rounded),
+          title: const Text('Télécharger les mises à jour en Wi-Fi'),
+          subtitle: const Text('Prêtes à installer en quelques secondes. Jamais sur tes données mobiles'),
+          value: state.wifiDownload,
+          // Le téléchargement suit la vérification automatique.
+          onChanged: state.autoCheck ? controller.setWifiDownload : null,
+        ),
     ]);
   }
 }

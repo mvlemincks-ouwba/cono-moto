@@ -47,16 +47,19 @@ prix officiels des carburants, Firebase (offre gratuite) pour les potes, TomTom 
 
 ### 🤖 Android
 
-L'APK est compilé automatiquement par GitHub Actions à chaque push.
+L'APK est compilé automatiquement par GitHub Actions à chaque push, un par type de processeur (≈ 40 Mo) :
+`cono-moto.apk` pour presque tous les téléphones (arm64) et `cono-moto-armeabi-v7a.apk` pour les vieux
+téléphones 32 bits.
 
 **Le plus simple (pour les potes)** : envoie-leur le lien de la page des versions,
 <https://github.com/mvlemincks-ouwba/cono-moto/releases/tag/derniere-version> : tout y est expliqué,
 sans compte GitHub, et l'app se met ensuite à jour toute seule ([détails](#5-mises-à-jour-automatiques--gratuit)).
 
 1. Sur GitHub, onglet **Actions** › dernier run **« APK Android »** réussi › section **Artifacts** › télécharge
-   **cono-moto-apk** (un zip qui contient `cono-moto.apk`).
-   Sur la branche `main`, l'APK est aussi publié dans la release **« derniere-version »** (onglet *Releases*).
-2. Copie `cono-moto.apk` sur le téléphone et ouvre-le. Android te demandera d'autoriser l'installation
+   **cono-moto-apk** (un zip qui contient les deux APK).
+   Sur la branche `main`, les APK sont aussi publiés dans la release **« derniere-version »** (onglet *Releases*).
+2. Copie `cono-moto.apk` sur le téléphone et ouvre-le (sur un vieux téléphone 32 bits qui le refuse :
+   `cono-moto-armeabi-v7a.apk`). Android te demandera d'autoriser l'installation
    depuis cette source (« sources inconnues ») : accepte.
 3. Les mises à jour s'installent par-dessus sans perdre tes données (toutes les versions sont signées avec la même clé).
    Les versions de `main` sont proposées par l'app elle-même au démarrage (Réglages › Mises à jour).
@@ -246,9 +249,13 @@ affiche ce qui a changé et, sur Android, la télécharge et l'installe en un ap
 demande d'autoriser Cono Moto à installer ses mises à jour ; ensuite, à partir d'Android 12, elles peuvent
 s'installer sans confirmation. Sur iPhone, l'app prévient et la mise à jour passe par SideStore ou Sideloadly.
 
+Sur Android, l'app télécharge l'APK de son type de processeur. En Wi-Fi, elle le télécharge même en douce dès
+qu'elle trouve la nouvelle version (jamais sur les données mobiles ni pendant une balade) : « Mettre à jour »
+l'installe alors en quelques secondes. Réglage « Télécharger les mises à jour en Wi-Fi » (Réglages › Mises à jour).
+
 Rien à configurer : à chaque fusion dans `main`, les builds **APK Android** et **IPA iPhone** publient dans la
 release [**« derniere-version »**](https://github.com/mvlemincks-ouwba/cono-moto/releases/tag/derniere-version)
-de ce dépôt l'APK, l'IPA, `android.json` / `ios.json` (version + quoi de neuf, lus par l'app), la source SideStore
+de ce dépôt les APK, l'IPA, `android.json` / `ios.json` (version + quoi de neuf, lus par l'app), la source SideStore
 `sidestore.json` et, en texte de la page, le mode d'emploi pour les potes
 (tiré de [`docs/releases/README.md`](docs/releases/README.md)).
 
@@ -256,7 +263,9 @@ de ce dépôt l'APK, l'IPA, `android.json` / `ios.json` (version + quoi de neuf,
 les mises à jour automatiques s'arrêteraient.
 
 Les téléphones qui ont une version d'avant cette fonction doivent installer une fois la nouvelle version à la main
-(depuis la page « derniere-version ») ; ensuite c'est automatique.
+(depuis la page « derniere-version ») ; ensuite c'est automatique. Pareil pour un vieux téléphone 32 bits resté
+en build 54 ou moins : cette version-là ne connaît que `cono-moto.apk` (arm64), il faut installer une fois
+`cono-moto-armeabi-v7a.apk` à la main.
 
 ### 6. (Facultatif) Ta propre clé de signature
 
@@ -326,7 +335,8 @@ lib/
   services/      clients des API (carburants, itinéraires, trafic, Firebase…)
 web_share/       page web de suivi en direct
 firebase/        règles de sécurité et hébergement
-android/         MainActivity.kt : canal natif fr.conomoto/native (SMS automatique, écran allumé)
+android/         MainActivity.kt : canaux natifs fr.conomoto/native (SMS automatique, écran allumé)
+                 et fr.conomoto/updater (installation des mises à jour, processeur, Wi-Fi)
 ios/             AppDelegate.swift : même canal (écran allumé, écran Messages pré-rempli), session audio
 ```
 

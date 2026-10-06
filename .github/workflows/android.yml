@@ -92,31 +92,67 @@ jobs:
             echo "CM_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
           fi
 
+      # Un APK par architecture (≈ 40 Mo au lieu de 106 pour l'APK universel) :
+      # arm64-v8a (presque tous les téléphones) devient cono-moto.apk, celui du
+      # lien du mode d'emploi et le seul que lisent les versions d'avant (build 54,
+      # champ `file` d'android.json) ; armeabi-v7a pour les vieux téléphones
+      # 32 bits. Pas de x86_64 (émulateurs seulement).
+      #
+      # versionCode : avec --split-per-abi, le plugin Gradle de Flutter 3.47.6 le
+      # remplace dans chaque APK par « code de l'ABI × 1000 + numéro de build »
+      # (packages/flutter_tools/gradle/src/main/kotlin/FlutterPlugin.kt, l. 673,
+      # versionCodeOverride ; codes dans FlutterPluginConstants.kt, l. 39-45,
+      # ABI_VERSION : armeabi-v7a = 1, arm64-v8a = 2, x86_64 = 4). Run 60 → 1060
+      # (32 bits) et 2060 (arm64) : au-dessus des APK universels d'avant
+      # (versionCode = numéro du run, 54 sur les téléphones) et croissant d'un run
+      # à l'autre pour chaque ABI. Ne plus jamais publier d'APK universel ni
+      # passer -P force-version-code-ignoring-abi=true : son versionCode (le
+      # numéro du run) serait plus bas et Android refuserait la mise à jour.
       - name: Build APK
         env:
           CM_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           CM_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           CM_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          flutter build apk --release \
+          flutter build apk --release --split-per-abi \
+            --target-platform android-arm,android-arm64 \
             --build-number=${{ github.run_number }} \
             --dart-define-from-file=build-config.json
-          cp build/app/outputs/flutter-apk/app-release.apk cono-moto.apk
+          # Garde-fou : chaque APK porte le versionCode attendu (voir plus haut).
+          aapt2="$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -n 1 || true)"
+          for abi in arm64-v8a:2 armeabi-v7a:1; do
+            apk="build/app/outputs/flutter-apk/app-${abi%%:*}-release.apk"
+            expected=$(( ${abi##*:} * 1000 + ${{ github.run_number }} ))
+            code="$([ -n "$aapt2" ] && "$aapt2" dump badging "$apk" | sed -n "s/^package: .*versionCode='\([0-9]*\)'.*/\1/p" || true)"
+            if [ -z "$code" ]; then
+              echo "::warning::versionCode de ${abi%%:*} non vérifié (aapt2 introuvable ou illisible)"
+            elif [ "$code" != "$expected" ]; then
+              echo "::error::${abi%%:*} : versionCode $code au lieu de $expected"
+              exit 1
+            fi
+          done
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk cono-moto.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk cono-moto-armeabi-v7a.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: cono-moto-apk
-          path: cono-moto.apk
+          path: |
+            cono-moto.apk
+            cono-moto-armeabi-v7a.apk
           retention-days: 30
 
-      # Sur main : l'APK puis sa description (android.json) dans la release
+      # Sur main : les APK puis leur description (android.json) dans la release
       # « derniere-version », lien stable à partager. L'appli lit android.json
-      # au démarrage pour se mettre à jour ; la page affiche le mode d'emploi.
+      # au démarrage pour se mettre à jour (`files` : l'APK de son architecture) ;
+      # la page affiche le mode d'emploi.
       - name: Description de la version
         if: github.ref == 'refs/heads/main'
         run: |
           python3 tool/release/make_manifest.py android \
             --file cono-moto.apk \
+            --abi-file arm64-v8a=cono-moto.apk \
+            --abi-file armeabi-v7a=cono-moto-armeabi-v7a.apk \
             --build ${{ github.run_number }} \
             --version "$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)" \
             --commit ${{ github.sha }} \
@@ -133,9 +169,11 @@ jobs:
           prerelease: false
           make_latest: true
           body_path: build/release/page.md
-          files: cono-moto.apk
+          files: |
+            cono-moto.apk
+            cono-moto-armeabi-v7a.apk
 
-      # Après l'APK, pour que l'appli ne voie jamais une version pas encore en ligne.
+      # Après les APK, pour que l'appli ne voie jamais une version pas encore en ligne.
       - name: Annonce de la version (android.json)
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
@@ -147,5 +185,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: cono-moto.apk
+          files: |
+            cono-moto.apk
+            cono-moto-armeabi-v7a.apk
           generate_release_notes: true

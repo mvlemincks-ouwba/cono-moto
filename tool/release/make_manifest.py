@@ -4,11 +4,14 @@
 Lancé par les workflows Android et iPhone sur `main`, après le build :
 
     python3 tool/release/make_manifest.py android --file cono-moto.apk \\
+        --abi-file arm64-v8a=cono-moto.apk --abi-file armeabi-v7a=cono-moto-armeabi-v7a.apk \\
         --build 57 --version 1.0.0 --commit <sha> --base-url <URL> --out build/release
 
 écrit `android.json` (ou `ios.json`, plus `sidestore.json` pour iPhone) :
 numéro de build, taille du fichier et « quoi de neuf » (titres des commits
-depuis la version précédemment publiée). Sans dépendance.
+depuis la version précédemment publiée). Sur Android, `files` donne en plus
+l'APK de chaque architecture ; `file` reste l'APK arm64, le seul que lisent
+les versions d'avant (build 54 et moins). Sans dépendance.
 """
 
 from __future__ import annotations
@@ -59,8 +62,8 @@ def release_notes(subjects: list[str], limit: int = MAX_NOTES) -> list[str]:
 
 
 def manifest(platform: str, version: str, build: int, commit: str, file_name: str, size: int,
-             notes: list[str], date: str) -> dict:
-    return {
+             notes: list[str], date: str, files: dict[str, dict] | None = None) -> dict:
+    m = {
         "platform": platform,
         "version": version,
         "build": build,
@@ -68,8 +71,25 @@ def manifest(platform: str, version: str, build: int, commit: str, file_name: st
         "date": date,
         "file": file_name,
         "size": size,
-        "notes": notes,
     }
+    if files:
+        # APK par architecture : l'appli prend la première que le téléphone accepte.
+        m["files"] = files
+    m["notes"] = notes
+    return m
+
+
+def abi_files(values: list[str]) -> dict[str, str]:
+    """`--abi-file arm64-v8a=cono-moto.apk` (répétable) → {ABI: chemin}."""
+    out: dict[str, str] = {}
+    for value in values:
+        abi, sep, path = (part.strip() for part in value.partition("="))
+        if not sep or not abi or not path or "/" in abi:
+            raise ValueError(f"--abi-file attend ABI=FICHIER, pas « {value} »")
+        if abi in out:
+            raise ValueError(f"--abi-file : {abi} donné deux fois")
+        out[abi] = path
+    return out
 
 
 def privacy_descriptions(info: dict) -> dict[str, str]:
@@ -174,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("platform", choices=["android", "ios"])
     ap.add_argument("--file", required=True, help="APK ou IPA publié à côté du manifeste")
+    ap.add_argument("--abi-file", action="append", default=[], metavar="ABI=FICHIER",
+                    help="APK d'une architecture (Android, répétable), ex. arm64-v8a=cono-moto.apk")
     ap.add_argument("--build", required=True, type=int)
     ap.add_argument("--version", required=True)
     ap.add_argument("--commit", required=True)
@@ -181,12 +203,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--info-plist-json", help="Info.plist converti en JSON (iPhone)")
     ap.add_argument("--out", default="build/release")
     a = ap.parse_args(argv)
+    try:
+        per_abi = abi_files(a.abi_file)
+    except ValueError as e:
+        ap.error(str(e))
 
     base_url = a.base_url.rstrip("/")
     notes = release_notes(commit_subjects(previous_commit(base_url, a.platform), a.commit))
     date = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    files = {abi: {"file": os.path.basename(path), "size": os.path.getsize(path)} for abi, path in per_abi.items()}
     m = manifest(a.platform, a.version, a.build, a.commit, os.path.basename(a.file),
-                 os.path.getsize(a.file), notes, date)
+                 os.path.getsize(a.file), notes, date, files)
 
     os.makedirs(a.out, exist_ok=True)
     with open(os.path.join(a.out, f"{a.platform}.json"), "w", encoding="utf-8") as f:

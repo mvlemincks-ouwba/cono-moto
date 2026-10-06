@@ -74,7 +74,43 @@ class MainTest(unittest.TestCase):
             self.assertEqual((m["platform"], m["build"], m["file"], m["size"]), ("android", 57, "cono-moto.apk", 42))
             self.assertEqual(m["notes"], ["Nouveauté"])
             self.assertTrue(m["date"].endswith("Z"))
+            self.assertNotIn("files", m)
             self.assertFalse(os.path.exists(os.path.join(out, "sidestore.json")))
+
+    def test_writes_apk_per_abi(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            arm64 = os.path.join(tmp, "cono-moto.apk")
+            arm32 = os.path.join(tmp, "cono-moto-armeabi-v7a.apk")
+            for path, size in [(arm64, 40), (arm32, 35)]:
+                with open(path, "wb") as f:
+                    f.write(b"x" * size)
+            out = os.path.join(tmp, "out")
+            with mock.patch.object(mm, "previous_commit", return_value=None), \
+                    mock.patch.object(mm, "commit_subjects", return_value=["Nouveauté"]), \
+                    mock.patch("builtins.print"):
+                mm.main(["android", "--file", arm64,
+                         "--abi-file", f"arm64-v8a={arm64}", "--abi-file", f"armeabi-v7a={arm32}",
+                         "--build", "60", "--version", "1.0.0", "--commit", "abc", "--base-url", BASE, "--out", out])
+            with open(os.path.join(out, "android.json"), encoding="utf-8") as f:
+                m = json.load(f)
+        # `file` / `size` : l'APK arm64, seul lu par les versions d'avant (build 54).
+        self.assertEqual((m["file"], m["size"]), ("cono-moto.apk", 40))
+        self.assertEqual(m["files"], {
+            "arm64-v8a": {"file": "cono-moto.apk", "size": 40},
+            "armeabi-v7a": {"file": "cono-moto-armeabi-v7a.apk", "size": 35},
+        })
+
+    def test_abi_files(self):
+        self.assertEqual(mm.abi_files([]), {})
+        self.assertEqual(mm.abi_files(["arm64-v8a=cono-moto.apk", " armeabi-v7a = dist/x.apk "]),
+                         {"arm64-v8a": "cono-moto.apk", "armeabi-v7a": "dist/x.apk"})
+        for bad in [["cono-moto.apk"], ["=cono-moto.apk"], ["arm64-v8a="], ["a/b=x.apk"],
+                    ["arm64-v8a=a.apk", "arm64-v8a=b.apk"]]:
+            with self.assertRaises(ValueError, msg=bad):
+                mm.abi_files(bad)
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+            mm.main(["android", "--file", "x.apk", "--abi-file", "x.apk", "--build", "60", "--version", "1",
+                     "--commit", "abc", "--base-url", BASE])
 
     def test_commit_subjects_unknown_previous(self):
         calls = []
@@ -105,7 +141,7 @@ class ReleasePageTest(unittest.TestCase):
         self.assertNotIn("{{REPO}}", text)
         # Liens vers la release « derniere-version » (« latest » pourrait être une release v*).
         self.assertNotIn("/releases/latest/", text)
-        for name in ["cono-moto.apk", "cono-moto-unsigned.ipa", "sidestore.json"]:
+        for name in ["cono-moto.apk", "cono-moto-armeabi-v7a.apk", "cono-moto-unsigned.ipa", "sidestore.json"]:
             self.assertIn(f"https://github.com/moi/cono-moto/releases/download/derniere-version/{name}", text)
 
 
