@@ -28,6 +28,8 @@ class SettingsScreen extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     // iPhone : Apple interdit l'envoi automatique de SMS.
     final smsAuto = NativeBridge.canSendSmsAutomatically;
+    // Sans webhook dans ce build, pas de rapports de plantage.
+    final discordReady = ref.watch(discordFeedbackClientProvider).isConfigured;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Réglages')),
@@ -229,6 +231,15 @@ class SettingsScreen extends ConsumerWidget {
               title: const Text('Signaler un bug'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.of(context).push(FeedbackScreen.route(initialKind: FeedbackKind.bug)),
+            ),
+            SwitchListTile(
+              secondary: const Icon(Icons.report_problem_outlined),
+              title: const Text('Envoyer les rapports de plantage'),
+              subtitle: Text(discordReady
+                  ? 'Sans ta position ni ton nom : juste l\'erreur et la version de l\'appli'
+                  : 'Le Discord n\'est pas encore branché sur cette version de l\'appli'),
+              value: discordReady && s.crashReports,
+              onChanged: discordReady ? (v) => n.update((x) => x.copyWith(crashReports: v)) : null,
             ),
             if (AppConfig.discordInviteUrl.isNotEmpty)
               ListTile(

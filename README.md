@@ -8,6 +8,7 @@ voir ses potes en direct, faire le plein au meilleur prix et savoir à quel poin
   <img src="docs/screenshots/09-compteur-piste.png" width="200" alt="Vue compteur Piste avec le cercle des G">
   <img src="docs/screenshots/02-garage.png" width="200" alt="Garage">
   <img src="docs/screenshots/03-historique.png" width="200" alt="Historique">
+  <img src="docs/screenshots/10-carte-partage.png" width="200" alt="Image de balade à partager">
   <img src="docs/screenshots/05-balades.png" width="200" alt="Balades à faire">
   <img src="docs/screenshots/07-potes.png" width="200" alt="Potes">
 </p>
@@ -22,6 +23,7 @@ voir ses potes en direct, faire le plein au meilleur prix et savoir à quel poin
 | 📐 **Angle d'inclinaison** | Jauge en direct, angle max gauche/droite, répartition des angles (téléphone fixé sur le guidon). |
 | 📊 **Stats** | Vitesse moyenne/max, freinages et accélérations forts, D+, nombre de virages, records, km par mois. |
 | 🕓 **Historique** | Toutes tes balades avec carte, graphes vitesse/angle, coût de la balade, « refaire cette balade ». |
+| 📸 **Image à partager** | Après la balade (ou depuis l'historique), une belle image à poster sur WhatsApp ou Instagram : ta trace colorée selon l'angle, km, temps, vitesses, angles max, D+ et virages. Marche même hors ligne. |
 | ⛽ **Essence** | Stations autour de toi ou le long de l'itinéraire avec le **prix du moment** (données officielles prix-carburants.gouv.fr), la moins chère mise en avant, prix affichés directement sur la carte. |
 | 💶 **Coût des balades** | Pleins, péages, restos… coût par balade, coût au km, conso calculée automatiquement. |
 | 🛢️ **Autonomie** | Estimation des km restants dans le réservoir, alerte avant la panne sèche avec les stations sur ta route. |
@@ -34,6 +36,7 @@ voir ses potes en direct, faire le plein au meilleur prix et savoir à quel poin
 | 📟 **Compteur à ta façon** | Des vues compteur par activité (Balade, Piste, Trail, Tranquille… ou les tiennes) qu'on fait défiler en roulant ; tu choisis les infos affichées, dont le **cercle des G** (accélération, freinage, force en virage). |
 | 🔄 **Mises à jour automatiques** | Au démarrage, l'app te montre les nouveautés et se met à jour en un appui (Android). Sur iPhone, via SideStore sans ordinateur. |
 | 💡 **Boîte à idées** | Propose une idée ou signale un bug depuis l'app : ça part sur le Discord de la bande, les potes votent 👍, et c'est traité. |
+| 💥 **Rapports de plantage** | Si l'app plante, un rapport part tout seul sur le Discord (sans ta position ni ton nom : juste l'erreur et la version de l'appli) et devient un ticket à corriger. Désactivable dans Réglages › Communauté. |
 | 🔗 **Partage de position** | Lien web de suivi en direct pour quelqu'un qui n'a pas l'app (valable 1 h, 4 h ou 12 h). |
 | 🆘 **Détection de chute** | Choc violent puis immobilité → compte à rebours, puis SMS automatique avec ta position à ton contact d'urgence + alerte aux potes (sur iPhone, le SMS est préparé : il reste à appuyer sur Envoyer, [voir plus bas](#-iphone)). |
 | 📴 **Cartes hors-ligne** | Télécharge une zone ou le couloir d'une balade avant de partir en zone blanche. |
@@ -48,16 +51,19 @@ prix officiels des carburants, Firebase (offre gratuite) pour les potes, TomTom 
 
 ### 🤖 Android
 
-L'APK est compilé automatiquement par GitHub Actions à chaque push.
+L'APK est compilé automatiquement par GitHub Actions à chaque push, un par type de processeur (≈ 40 Mo) :
+`cono-moto.apk` pour presque tous les téléphones (arm64) et `cono-moto-armeabi-v7a.apk` pour les vieux
+téléphones 32 bits.
 
 **Le plus simple (pour les potes)** : envoie-leur le lien de la page des versions,
 <https://github.com/mvlemincks-ouwba/cono-moto/releases/tag/derniere-version> : tout y est expliqué,
 sans compte GitHub, et l'app se met ensuite à jour toute seule ([détails](#5-mises-à-jour-automatiques--gratuit)).
 
 1. Sur GitHub, onglet **Actions** › dernier run **« APK Android »** réussi › section **Artifacts** › télécharge
-   **cono-moto-apk** (un zip qui contient `cono-moto.apk`).
-   Sur la branche `main`, l'APK est aussi publié dans la release **« derniere-version »** (onglet *Releases*).
-2. Copie `cono-moto.apk` sur le téléphone et ouvre-le. Android te demandera d'autoriser l'installation
+   **cono-moto-apk** (un zip qui contient les deux APK).
+   Sur la branche `main`, les APK sont aussi publiés dans la release **« derniere-version »** (onglet *Releases*).
+2. Copie `cono-moto.apk` sur le téléphone et ouvre-le (sur un vieux téléphone 32 bits qui le refuse :
+   `cono-moto-armeabi-v7a.apk`). Android te demandera d'autoriser l'installation
    depuis cette source (« sources inconnues ») : accepte.
 3. Les mises à jour s'installent par-dessus sans perdre tes données (toutes les versions sont signées avec la même clé).
    Les versions de `main` sont proposées par l'app elle-même au démarrage (Réglages › Mises à jour).
@@ -216,6 +222,15 @@ réponds dans le fil, pas dans le salon. Dans un **forum**, chaque post est déj
 > L'URL du webhook est intégrée à l'app : quelqu'un qui décortique l'APK pourrait poster dans ce salon.
 > En cas d'abus, supprime le webhook, crée-en un autre et mets à jour le secret.
 
+**Rapports de plantage** : le même webhook reçoit aussi, tout seul, un rapport « 💥 Plantage : … » quand
+l'app plante (versions publiées seulement). C'est un bug comme un autre (champ « Type » = Bug), donc il devient
+un ticket GitHub. Dedans : le type d'erreur, son message nettoyé (liens, positions, numéros, identifiants et
+textes saisis retirés), la pile d'appels, l'écran affiché et les versions de l'app et du téléphone ; jamais de
+position, de nom, de numéro ni d'identifiant Firebase. Anti-spam : une même erreur au plus une fois par semaine
+et 3 rapports par jour au maximum par téléphone ; les coupures réseau sont ignorées. Sans réseau, jusqu'à
+3 rapports attendent le démarrage suivant. Chacun peut les couper dans **Réglages › Communauté › Envoyer les
+rapports de plantage** (activé par défaut ; grisé si le webhook manque dans le build).
+
 **b) Le pont Discord → GitHub (pour que les demandes soient traitées)**
 
 Toutes les heures, le workflow « Boîte à idées » ouvre un fil sous chaque nouvelle demande (salon texte,
@@ -247,9 +262,13 @@ affiche ce qui a changé et, sur Android, la télécharge et l'installe en un ap
 demande d'autoriser Cono Moto à installer ses mises à jour ; ensuite, à partir d'Android 12, elles peuvent
 s'installer sans confirmation. Sur iPhone, l'app prévient et la mise à jour passe par SideStore ou Sideloadly.
 
+Sur Android, l'app télécharge l'APK de son type de processeur. En Wi-Fi, elle le télécharge même en douce dès
+qu'elle trouve la nouvelle version (jamais sur les données mobiles ni pendant une balade) : « Mettre à jour »
+l'installe alors en quelques secondes. Réglage « Télécharger les mises à jour en Wi-Fi » (Réglages › Mises à jour).
+
 Rien à configurer : à chaque fusion dans `main`, les builds **APK Android** et **IPA iPhone** publient dans la
 release [**« derniere-version »**](https://github.com/mvlemincks-ouwba/cono-moto/releases/tag/derniere-version)
-de ce dépôt l'APK, l'IPA, `android.json` / `ios.json` (version + quoi de neuf, lus par l'app), la source SideStore
+de ce dépôt les APK, l'IPA, `android.json` / `ios.json` (version + quoi de neuf, lus par l'app), la source SideStore
 `sidestore.json` et, en texte de la page, le mode d'emploi pour les potes
 (tiré de [`docs/releases/README.md`](docs/releases/README.md)).
 
@@ -257,7 +276,9 @@ de ce dépôt l'APK, l'IPA, `android.json` / `ios.json` (version + quoi de neuf,
 les mises à jour automatiques s'arrêteraient.
 
 Les téléphones qui ont une version d'avant cette fonction doivent installer une fois la nouvelle version à la main
-(depuis la page « derniere-version ») ; ensuite c'est automatique.
+(depuis la page « derniere-version ») ; ensuite c'est automatique. Pareil pour un vieux téléphone 32 bits resté
+en build 54 ou moins : cette version-là ne connaît que `cono-moto.apk` (arm64), il faut installer une fois
+`cono-moto-armeabi-v7a.apk` à la main.
 
 ### 6. (Facultatif) Ta propre clé de signature
 
@@ -327,7 +348,8 @@ lib/
   services/      clients des API (carburants, itinéraires, trafic, Firebase…)
 web_share/       page web de suivi en direct
 firebase/        règles de sécurité et hébergement
-android/         MainActivity.kt : canal natif fr.conomoto/native (SMS automatique, écran allumé)
+android/         MainActivity.kt : canaux natifs fr.conomoto/native (SMS automatique, écran allumé)
+                 et fr.conomoto/updater (installation des mises à jour, processeur, Wi-Fi)
 ios/             AppDelegate.swift : même canal (écran allumé, écran Messages pré-rempli), session audio
 ```
 

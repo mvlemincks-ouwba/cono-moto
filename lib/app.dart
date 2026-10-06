@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/crash_reporter.dart';
 import 'core/settings.dart';
 import 'core/theme.dart';
 import 'features/home/home_shell.dart';
@@ -21,6 +22,8 @@ class ConoMotoApp extends ConsumerWidget {
       title: 'Cono Moto',
       debugShowCheckedModeBanner: false,
       navigatorKey: rootNavigatorKey,
+      // Écran affiché, joint aux rapports de plantage.
+      navigatorObservers: [crashScreenObserver],
       theme: CmTheme.light(),
       darkTheme: CmTheme.dark(),
       themeMode: themeMode,

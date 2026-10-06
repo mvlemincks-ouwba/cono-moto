@@ -3,6 +3,8 @@ package fr.conomoto.cono_moto
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageInstaller
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -55,6 +57,9 @@ class MainActivity : FlutterActivity() {
                         }
                         result.success(null)
                     }
+                    // Architectures du téléphone (la préférée d'abord) : l'appli télécharge l'APK qui lui va.
+                    "supportedAbis" -> result.success(Build.SUPPORTED_ABIS.toList())
+                    "isNetworkUnmetered" -> result.success(isNetworkUnmetered())
                     else -> result.notImplemented()
                 }
             }
@@ -97,6 +102,20 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    /// Connexion sans compteur (Wi-Fi, Ethernet) ? Dans le doute (pas de réseau,
+    /// erreur), non : la mise à jour ne se télécharge pas en arrière-plan sur
+    /// les données mobiles ni sur un partage de connexion.
+    private fun isNetworkUnmetered(): Boolean {
+        return try {
+            val connectivity = getSystemService(ConnectivityManager::class.java) ?: return false
+            val caps = connectivity.getNetworkCapabilities(connectivity.activeNetwork) ?: return false
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /// Installe la mise à jour avec PackageInstaller. Android demande une

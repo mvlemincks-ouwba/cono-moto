@@ -51,6 +51,16 @@ void main() {
       expect(((p['embeds'] as List).single['title'] as String).length, lessThanOrEqualTo(256));
     });
 
+    test('titre et pied de page sur mesure (rapports de plantage)', () {
+      const d = FeedbackDraft(kind: FeedbackKind.bug, title: 'StateError', description: 'Bad state: No element');
+      final p = buildDiscordPayload(d, _ctx, heading: '💥 Plantage : StateError', footer: 'Rapport automatique');
+      expect(p['thread_name'], '💥 Plantage : StateError');
+      final embed = (p['embeds'] as List).single as Map<String, dynamic>;
+      expect(embed['title'], '💥 Plantage : StateError');
+      expect(embed['footer'], {'text': 'Rapport automatique'});
+      expect((embed['fields'] as List).first, {'name': 'Type', 'value': '🐞 Bug', 'inline': true});
+    });
+
     test('capture : référence attachment://', () {
       final a = FeedbackAttachment(bytes: Uint8List.fromList([1, 2, 3]), filename: 'capture.jpg');
       final p = buildDiscordPayload(_draft(attachment: a), _ctx);
@@ -110,6 +120,25 @@ void main() {
       await c.send(_draft(), _ctx);
       expect(bodies, hasLength(2));
       expect(bodies.last.containsKey('thread_name'), isFalse);
+    });
+
+    test('message déjà construit : même renvoi sans thread_name', () async {
+      final bodies = <Map>[];
+      final c = DiscordFeedbackClient(
+        webhookUrl: _webhook,
+        client: MockClient((req) async {
+          final body = jsonDecode(req.body) as Map;
+          bodies.add(body);
+          return http.Response('{}', body.containsKey('thread_name') ? 400 : 200);
+        }),
+      );
+      final payload = buildDiscordPayload(_draft(), _ctx);
+      await c.sendPayload(payload);
+      expect(bodies, hasLength(2));
+      expect(bodies.last.containsKey('thread_name'), isFalse);
+      expect(payload.containsKey('thread_name'), isTrue); // message d'origine intact
+      final rejected = DiscordFeedbackClient(webhookUrl: _webhook, client: MockClient((_) async => http.Response('', 400)));
+      await expectLater(rejected.sendPayload(payload), throwsA(isA<FeedbackException>()));
     });
 
     test('capture envoyée en multipart', () async {
