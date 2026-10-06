@@ -14,7 +14,8 @@ un salon texte (une demande = un message) :
 4. les réponses des potes dans le fil Discord sont recopiées en commentaires
    du ticket (pour qu'une question posée par Claude ait sa réponse) ;
 5. un commentaire GitHub contenant <!-- pour-discord --> est reposté dans le
-   fil Discord (c'est ainsi que Claude répond aux potes) ;
+   fil Discord (c'est ainsi que Claude répond aux potes), s'il vient du
+   propriétaire du dépôt ou d'un collaborateur (le dépôt est public) ;
 6. quand le ticket est fermé, le bot annonce « c'est fait » (ou « pas prévu »).
 
 Sans dépendance (urllib). Variables d'environnement :
@@ -42,6 +43,9 @@ NOTIFIED_MARKER = "discord-notified"
 SEEN_MARKER = "discord-seen"
 MESSAGE_MARKER = "discord-msg"
 REPLY_MARKER = "<!-- pour-discord -->"
+# Dépôt public : n'importe qui peut commenter un ticket. Seuls ces auteurs
+# parlent au nom de Cono Moto dans Discord.
+TRUSTED_AUTHORS = ("OWNER", "MEMBER", "COLLABORATOR")
 VOTES_RE = re.compile(r"^\*\*👍 Votes :\*\* \d+$", re.M)
 # « 💡 Idée : », « 🐞 Bug : »… en tête d'un titre (embed de l'appli, post du forum)
 KIND_PREFIX_RE = re.compile(r"^\s*(?:💡|🐞|💬)?\s*(?:(?:idée|idee|bug|autre)\s*:\s*)?", re.I)
@@ -298,6 +302,11 @@ def reply_comment(message: dict) -> str:
     return "\n".join(lines)
 
 
+def relayable(comment: dict) -> bool:
+    """Commentaire GitHub à reposter dans le fil Discord."""
+    return REPLY_MARKER in (comment.get("body") or "") and comment.get("author_association") in TRUSTED_AUTHORS
+
+
 def discord_text(comment_body: str) -> str:
     """Commentaire GitHub → message Discord (sans marqueurs ni pied de page)."""
     text = comment_body.replace(REPLY_MARKER, "")
@@ -484,7 +493,7 @@ def main() -> int:
             comments = github.call("GET", f"/repos/{repo}/issues/{issue['number']}/comments?per_page=100")
             for c in comments:
                 cid = str(c["id"])
-                if REPLY_MARKER in (c.get("body") or "") and cid not in done:
+                if relayable(c) and cid not in done:
                     text = discord_text(c["body"])
                     if text:
                         discord.call("POST", f"/channels/{tid}/messages",

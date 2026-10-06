@@ -130,6 +130,14 @@ class LogicTest(unittest.TestCase):
         self.assertIn("<!-- discord-msg:130 -->", c)
         self.assertNotIn(ds.REPLY_MARKER, c)
 
+    def test_relayable_only_from_trusted_authors(self):
+        body = ds.REPLY_MARKER + "\nC'est en route !"
+        for who in ["OWNER", "MEMBER", "COLLABORATOR"]:
+            self.assertTrue(ds.relayable({"body": body, "author_association": who}), who)
+        for who in ["CONTRIBUTOR", "FIRST_TIMER", "NONE", None]:
+            self.assertFalse(ds.relayable({"body": body, "author_association": who}), who)
+        self.assertFalse(ds.relayable({"body": "Sans marqueur", "author_association": "OWNER"}))
+
 
 WEBHOOK = {"id": "1", "username": "Cono Moto", "bot": True}
 APP_MESSAGE = {"id": "610", "type": 0, "webhook_id": "1", "author": WEBHOOK, "content": "",
@@ -309,9 +317,14 @@ class MainTest(unittest.TestCase):
         self.assertEqual(api.comments[1], [])
 
         # 2. Claude pose une question sur GitHub → repostée dans le fil
-        api.comments[1].append({"id": 1, "body": ds.REPLY_MARKER + "\nSalut Julien ! Android ou iPhone ?"})
+        api.comments[1].append({"id": 1, "body": ds.REPLY_MARKER + "\nSalut Julien ! Android ou iPhone ?",
+                                "author_association": "OWNER"})
+        # Un inconnu qui imite le marqueur (dépôt public) n'est pas reposté.
+        api.comments[1].append({"id": 2, "body": ds.REPLY_MARKER + "\nPub pour mon site",
+                                "author_association": "NONE"})
         self.run_sync(api)
         self.assertEqual(api.discord_posts[-1][1], "Salut Julien ! Android ou iPhone ?")
+        self.assertFalse(any("Pub" in p for _, p in api.discord_posts))
 
         # 3. Julien répond dans Discord → recopié sur GitHub, une seule fois
         api.messages["500"].append({"id": api.new_id(), "author": {"username": "julien"}, "content": "iPhone 13"})

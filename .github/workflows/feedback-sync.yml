@@ -29,10 +29,14 @@ jobs:
     name: Synchro Discord
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Sur un commentaire ou une fermeture, uniquement pour les tickets « feedback ».
+    # Sur un commentaire ou une fermeture, uniquement pour les tickets « feedback »,
+    # et pour un commentaire, seulement s'il vient du propriétaire ou d'un
+    # collaborateur (dépôt public : n'importe qui peut commenter).
     if: >-
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
-      contains(github.event.issue.labels.*.name, 'feedback')
+      (contains(github.event.issue.labels.*.name, 'feedback') &&
+       (github.event_name != 'issue_comment' ||
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)))
     steps:
       - uses: actions/checkout@v4
 
