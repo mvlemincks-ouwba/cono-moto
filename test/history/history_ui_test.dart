@@ -202,8 +202,33 @@ void main() {
       await tester.scrollUntilVisible(find.text('TOTAL'), 200, scrollable: list);
       expect(find.text('A41'), findsOneWidget);
       await tester.scrollUntilVisible(find.text('Refaire cette balade'), 200, scrollable: list);
+      await tester.scrollUntilVisible(find.text("Partager l'image"), 200, scrollable: list);
+      expect(find.text('GPX'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await _unmountIgnoringMapLibre(tester);
     });
   }
+
+  testWidgets('détail d’une balade : « Partager l’image » dans le menu', (tester) async {
+    await _pump(
+      tester,
+      const RideDetailScreen(rideId: 'r1'),
+      size: _sizes.values.first,
+      overrides: [
+        rideProvider.overrideWith((ref, id) => Stream.value(rides.firstWhere((r) => r.id == id))),
+        rideTrackProvider.overrideWith((ref, id) async => _track()),
+        rideCostDataProvider.overrideWith((ref, id) => Stream.value(const RideCostData(fuel: [], expenses: []))),
+      ],
+    );
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.widgetWithText(PopupMenuItem<String>, "Partager l'image"), findsOneWidget);
+    expect(find.widgetWithText(PopupMenuItem<String>, 'Exporter en GPX'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    // Ferme le menu sans rien choisir.
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pump(const Duration(milliseconds: 400));
+    await _unmountIgnoringMapLibre(tester);
+  });
 }

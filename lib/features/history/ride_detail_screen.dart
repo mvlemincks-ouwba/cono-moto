@@ -21,6 +21,7 @@ import '../routes/route_detail_screen.dart';
 import '../social/social_sheets.dart';
 import 'history_providers.dart';
 import 'ride_analysis.dart';
+import 'ride_share_card.dart';
 import 'widgets/chart_kit.dart';
 import 'widgets/ride_card.dart' show capitalizeFirst;
 
@@ -183,6 +184,16 @@ class _RideDetailScreenState extends ConsumerState<RideDetailScreen> {
     }
   }
 
+  Future<void> _shareImage(Ride ride, List<TrackPoint> track, Bike? bike) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await shareRideCard(context, ride: ride, track: track, bike: bike);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _replay(Ride ride) async {
     if (_busy) return;
     setState(() => _busy = true);
@@ -245,6 +256,7 @@ class _RideDetailScreenState extends ConsumerState<RideDetailScreen> {
             onSelected: (v) => switch (v) {
               'rename' => _rename(ride),
               'notes' => _editNotes(ride),
+              'image' => _shareImage(ride, track, bike),
               'gpx' => _exportGpx(ride),
               'replay' => _replay(ride),
               'delete' => _delete(ride),
@@ -258,6 +270,10 @@ class _RideDetailScreenState extends ConsumerState<RideDetailScreen> {
               PopupMenuItem(
                 value: 'notes',
                 child: ListTile(leading: Icon(Icons.notes_rounded), title: Text('Notes')),
+              ),
+              PopupMenuItem(
+                value: 'image',
+                child: ListTile(leading: Icon(Icons.image_outlined), title: Text("Partager l'image")),
               ),
               PopupMenuItem(
                 value: 'gpx',
@@ -332,6 +348,12 @@ class _RideDetailScreenState extends ConsumerState<RideDetailScreen> {
                   onPressed: _busy ? null : () => _replay(ride),
                   icon: const Icon(Icons.replay_rounded),
                   label: const Text('Refaire cette balade'),
+                ),
+                const SizedBox(height: CmSpacing.sm),
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _shareImage(ride, track, bike),
+                  icon: const Icon(Icons.image_outlined),
+                  label: const Text("Partager l'image"),
                 ),
                 const SizedBox(height: CmSpacing.sm),
                 Row(
