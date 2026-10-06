@@ -131,6 +131,76 @@ class LogicTest(unittest.TestCase):
         self.assertNotIn(ds.REPLY_MARKER, c)
 
 
+WEBHOOK = {"id": "1", "username": "Cono Moto", "bot": True}
+APP_MESSAGE = {"id": "610", "type": 0, "webhook_id": "1", "author": WEBHOOK, "content": "",
+               "embeds": APP_STARTER["embeds"], "reactions": [{"emoji": {"name": "👍"}, "count": 3}]}
+MANUAL_MESSAGE = {"id": "620", "type": 0, "author": {"id": "4", "username": "seb_moto", "global_name": "Seb"},
+                  "content": "**Mode pluie** pour la carte <@123>\nAvec des couleurs plus contrastées."}
+PINNED_MESSAGE = {"id": "600", "type": 0, "pinned": True, "webhook_id": "1", "author": WEBHOOK, "content": "",
+                  "embeds": [{"title": "📌 Comment ça marche", "description": "Une demande = un message."}]}
+BOT_MESSAGE = {"id": "630", "type": 0, "author": {"id": "8", "username": "ConoBot", "bot": True},
+               "content": "📌 Bien reçu ! C'est noté (n°1)."}
+
+
+class TextChannelLogicTest(unittest.TestCase):
+    def test_channel_id_from_env(self):
+        self.assertEqual(ds.channel_id_from({"DISCORD_FORUM_CHANNEL_ID": "42", "DISCORD_CHANNEL_ID": "77"}), "42")
+        self.assertEqual(ds.channel_id_from({"DISCORD_FORUM_CHANNEL_ID": " ", "DISCORD_CHANNEL_ID": "77 "}), "77")
+        self.assertEqual(ds.channel_id_from({"DISCORD_CHANNEL_ID": "77"}), "77")
+        self.assertEqual(ds.channel_id_from({}), "")
+
+    def test_channel_type(self):
+        self.assertTrue(ds.is_text_channel({"type": 0}))
+        self.assertTrue(ds.is_text_channel({"type": 5}))
+        self.assertFalse(ds.is_text_channel({"type": 15}))
+        self.assertFalse(ds.is_text_channel({}))
+
+    def test_is_request_message(self):
+        self.assertTrue(ds.is_request_message(APP_MESSAGE, "8"))  # webhook de l'appli : une demande
+        self.assertTrue(ds.is_request_message(MANUAL_MESSAGE, "8"))
+        self.assertTrue(ds.is_request_message(dict(MANUAL_MESSAGE, type=19), "8"))  # réponse à un message
+        self.assertTrue(ds.is_request_message(
+            {"id": "1", "author": {"id": "4"}, "content": "", "attachments": [{"url": "https://cdn/x.png"}]}, "8"))
+        self.assertTrue(ds.is_request_message(MANUAL_MESSAGE, None))
+        self.assertFalse(ds.is_request_message(PINNED_MESSAGE, "8"))
+        self.assertFalse(ds.is_request_message(BOT_MESSAGE, "8"))
+        self.assertFalse(ds.is_request_message(dict(BOT_MESSAGE, author={"id": "8"}), "8"))
+        self.assertFalse(ds.is_request_message(dict(BOT_MESSAGE, author={"id": "9", "bot": True}), "8"))
+        self.assertFalse(ds.is_request_message(dict(MANUAL_MESSAGE, type=6), "8"))  # « a épinglé un message »
+        self.assertFalse(ds.is_request_message(dict(MANUAL_MESSAGE, type=18), "8"))  # « a créé un fil »
+        self.assertFalse(ds.is_request_message(dict(MANUAL_MESSAGE, content="  "), "8"))
+        self.assertFalse(ds.is_request_message(None, "8"))
+
+    def test_needs_thread(self):
+        self.assertTrue(ds.needs_thread(APP_MESSAGE, "8"))
+        self.assertFalse(ds.needs_thread(dict(APP_MESSAGE, thread={"id": "610"}), "8"))
+        self.assertFalse(ds.needs_thread(dict(APP_MESSAGE, flags=32), "8"))
+        self.assertFalse(ds.needs_thread(PINNED_MESSAGE, "8"))
+
+    def test_thread_title(self):
+        self.assertEqual(ds.thread_title(APP_MESSAGE), "Radars sur la carte")
+        bug = {"content": "", "embeds": [{"title": "🐞 Bug : La carte se fige", "description": "Plus rien."}]}
+        self.assertEqual(ds.thread_title(bug), "La carte se fige")
+        self.assertEqual(ds.thread_title(MANUAL_MESSAGE), "Mode pluie pour la carte")
+        # Message écrit à la main avec un aperçu de lien : c'est le texte qui compte
+        link = {"content": "\n> Regardez ça <:moto:42> https://exemple.fr", "embeds": [{"title": "Exemple"}]}
+        self.assertEqual(ds.thread_title(link), "Regardez ça :moto: https://exemple.fr")
+        long = ds.thread_title({"content": "Ce serait vraiment super " * 10})
+        self.assertLessEqual(len(long), 100)
+        self.assertTrue(long.endswith("super…"))
+        long = ds.thread_title({"content": "Ce serait vraiment génial " * 10})
+        self.assertLessEqual(len(long), 100)
+        self.assertTrue(long.endswith("vraiment…"))  # « gé… » évité
+        only_image = {"author": {"username": "seb_moto", "global_name": "Seb"}, "content": "",
+                      "attachments": [{"url": "https://cdn/x.png"}]}
+        self.assertEqual(ds.thread_title(only_image), "Demande de Seb")
+
+    def test_clean_title_without_kind_prefix(self):
+        self.assertEqual(ds.clean_title("🐞 Bug : La carte se fige"), "La carte se fige")
+        self.assertEqual(ds.clean_title("Idée: mode pluie"), "mode pluie")
+        self.assertEqual(ds.clean_title("Bugs et idées en vrac"), "Bugs et idées en vrac")
+
+
 class FakeApi:
     """Discord + GitHub en mémoire, branchés à la place de Http."""
 
@@ -252,6 +322,121 @@ class MainTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"DISCORD_BOT_TOKEN": "", "DISCORD_FORUM_CHANNEL_ID": ""}), \
                 mock.patch("builtins.print"):
             self.assertEqual(ds.main(), 0)
+
+
+class FakeTextApi(FakeApi):
+    """Salon texte « 77 » : une demande = un message du salon, le bot (id 8)
+    ouvre un fil dessous, et le fil porte l'id du message."""
+
+    def __init__(self):
+        super().__init__()
+        system = {"id": "601", "type": 6, "author": {"id": "3", "username": "marc"}, "content": ""}
+        self.channel = [PINNED_MESSAGE, system, APP_MESSAGE, MANUAL_MESSAGE, BOT_MESSAGE]
+        self.threads = {"5000": {"id": "5000", "name": "Fil d'un autre salon", "parent_id": "99"}}
+        self.messages = {}  # messages des fils
+        self.opened: list[tuple[str, str]] = []
+
+    def discord(self, method, path, body):
+        if path == "/channels/77":
+            return {"id": "77", "type": 0, "guild_id": "7"}
+        if path == "/users/@me":
+            return {"id": "8", "username": "ConoBot", "bot": True}
+        if path == "/guilds/7/threads/active":
+            return {"threads": list(self.threads.values())}
+        if path.startswith("/channels/77/threads/archived"):
+            return {"threads": []}
+        if path == "/channels/77/messages?limit=100":
+            return [dict(m, thread=self.threads[m["id"]]) if m["id"] in self.threads else m
+                    for m in reversed(self.channel)]
+        if method == "POST" and path.startswith("/channels/77/messages/") and path.endswith("/threads"):
+            mid = path.split("/")[4]
+            if mid in self.threads:
+                raise RuntimeError("400 : ce message a déjà un fil")
+            self.threads[mid] = {"id": mid, "name": body["name"], "parent_id": "77", "type": 11}
+            self.messages[mid] = [{"id": self.new_id(), "type": 21, "author": {"username": "seb_moto"},
+                                   "content": "", "message_reference": {"message_id": mid}}]
+            self.opened.append((mid, body["name"]))
+            return self.threads[mid]
+        if method == "GET" and path.startswith("/channels/77/messages/"):
+            found = [m for m in self.channel if m["id"] == path.split("/")[4]]
+            if not found:
+                raise RuntimeError("404 : message introuvable")
+            return found[0]
+        tid = path.split("/")[2]
+        if tid not in self.messages:
+            raise AssertionError(f"{method} {path}")
+        if method == "GET" and "?after=" in path:
+            after = int(path.split("after=")[1].split("&")[0])
+            return [m for m in self.messages[tid] if int(m["id"]) > after][::-1]
+        if method == "POST" and path == f"/channels/{tid}/messages":
+            self.discord_posts.append((tid, body["content"]))
+            self.messages[tid].append({"id": self.new_id(), "author": {"id": "8", "username": "ConoBot", "bot": True},
+                                       "content": body["content"]})
+            return {}
+        # Dans un salon texte, le 1er message n'est pas dans le fil.
+        raise AssertionError(f"{method} {path}")
+
+
+class TextChannelTest(unittest.TestCase):
+    ENV = {"DISCORD_BOT_TOKEN": "t", "DISCORD_FORUM_CHANNEL_ID": "", "DISCORD_CHANNEL_ID": "77",
+           "GITHUB_TOKEN": "g", "GITHUB_REPOSITORY": "moi/cono-moto"}
+
+    def run_sync(self, api):
+        with mock.patch.dict(os.environ, self.ENV), mock.patch.object(ds, "Http", api.http), \
+                mock.patch("builtins.print"):
+            return ds.main()
+
+    def test_text_channel(self):
+        api = FakeTextApi()
+        # 1. Un fil sous la demande de l'appli et sous celle de Seb, rien d'autre
+        self.assertEqual(self.run_sync(api), 0)
+        self.assertEqual(api.opened, [("610", "Radars sur la carte"), ("620", "Mode pluie pour la carte")])
+        self.assertEqual([i["title"] for i in api.issues],
+                         ["[Idée] Radars sur la carte", "[Retour] Mode pluie pour la carte"])
+        self.assertEqual(api.issues[0]["labels"], ["feedback", "idée"])
+        self.assertEqual(api.issues[1]["labels"], ["feedback"])
+        body = api.issues[0]["body"]
+        self.assertIn("Afficher les radars fixes", body)
+        self.assertIn("**De :** Julien", body)
+        self.assertIn("**👍 Votes :** 3", body)
+        self.assertIn("https://discord.com/channels/7/610", body)
+        self.assertEqual(ds.thread_id_of(api.issues[1]), "620")
+        self.assertIn("**De :** Seb", api.issues[1]["body"])
+        self.assertIn("Avec des couleurs plus contrastées.", api.issues[1]["body"])
+        # « Bien reçu » dans chaque fil (jamais dans le salon), épinglé et bot ignorés
+        self.assertEqual([tid for tid, _ in api.discord_posts], ["610", "620"])
+        self.assertTrue(all("Bien reçu" in p for _, p in api.discord_posts))
+        self.assertNotIn("600", api.threads)
+        self.assertNotIn("630", api.threads)
+
+        # 2. Deuxième passage : rien n'est recréé
+        self.assertEqual(self.run_sync(api), 0)
+        self.assertEqual(len(api.opened), 2)
+        self.assertEqual(len(api.issues), 2)
+        self.assertEqual(len(api.discord_posts), 2)
+
+        # 3. Les réponses des potes se lisent dans le fil, pas dans le salon
+        api.messages["620"].append({"id": api.new_id(), "author": {"username": "julien"}, "content": "Grave, +1"})
+        api.channel.append({"id": api.new_id(), "type": 0, "author": {"id": "4", "username": "seb_moto"},
+                            "content": "Et un mode nuit ?"})
+        self.assertEqual(self.run_sync(api), 0)
+        copied = [c["body"] for c in api.comments[2] if "discord-msg" in c["body"]]
+        self.assertEqual(len(copied), 1)
+        self.assertIn("> Grave, +1", copied[0])
+        self.assertEqual(api.comments[1], [])
+        # … et un nouveau message du salon est une nouvelle demande
+        self.assertEqual(api.opened[-1][1], "Et un mode nuit ?")
+        self.assertEqual(len(api.issues), 3)
+
+    def test_thread_on_pinned_message_is_not_a_ticket(self):
+        api = FakeTextApi()
+        # Quelqu'un a ouvert un fil à la main sous le « Comment ça marche » épinglé
+        api.threads["600"] = {"id": "600", "name": "Comment ça marche", "parent_id": "77", "type": 11}
+        api.messages["600"] = []
+        self.assertEqual(self.run_sync(api), 0)
+        self.assertEqual(len(api.issues), 2)
+        self.assertNotIn("600", [ds.thread_id_of(i) for i in api.issues])
+        self.assertNotIn("600", [tid for tid, _ in api.discord_posts])
 
 
 if __name__ == "__main__":

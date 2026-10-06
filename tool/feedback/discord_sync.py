@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
 """Pont Discord ↔ GitHub pour la boîte à idées Cono Moto.
 
-Lancé toutes les heures par .github/workflows/feedback-sync.yml :
+Lancé toutes les heures par .github/workflows/feedback-sync.yml. Le salon
+Discord peut être un salon forum (une demande = un post, donc déjà un fil) ou
+un salon texte (une demande = un message) :
 
-1. chaque nouveau fil du salon forum Discord (posté depuis l'appli ou à la main)
-   devient un ticket GitHub (étiquettes « feedback » + « idée » / « bug »),
-   et le bot répond « bien reçu » dans le fil ;
-2. le nombre de 👍 du premier message est recopié dans le ticket ;
-3. les réponses des potes dans le fil Discord sont recopiées en commentaires
+1. salon texte : le bot ouvre un fil sous chaque nouvelle demande (message de
+   l'appli via le webhook, ou écrit à la main) ; les messages épinglés (le
+   « Comment ça marche »), ceux du bot et les messages système sont ignorés ;
+2. chaque nouveau fil devient un ticket GitHub (étiquettes « feedback » +
+   « idée » / « bug »), et le bot répond « bien reçu » dans le fil ;
+3. le nombre de 👍 du premier message est recopié dans le ticket ;
+4. les réponses des potes dans le fil Discord sont recopiées en commentaires
    du ticket (pour qu'une question posée par Claude ait sa réponse) ;
-4. un commentaire GitHub contenant <!-- pour-discord --> est reposté dans le
+5. un commentaire GitHub contenant <!-- pour-discord --> est reposté dans le
    fil Discord (c'est ainsi que Claude répond aux potes) ;
-5. quand le ticket est fermé, le bot annonce « c'est fait » (ou « pas prévu »).
+6. quand le ticket est fermé, le bot annonce « c'est fait » (ou « pas prévu »).
 
 Sans dépendance (urllib). Variables d'environnement :
-  DISCORD_BOT_TOKEN, DISCORD_FORUM_CHANNEL_ID, GITHUB_TOKEN, GITHUB_REPOSITORY
+  DISCORD_BOT_TOKEN, DISCORD_FORUM_CHANNEL_ID (ou DISCORD_CHANNEL_ID : l'id du
+  salon, texte ou forum), GITHUB_TOKEN, GITHUB_REPOSITORY
 """
 
 from __future__ import annotations
@@ -38,6 +43,13 @@ SEEN_MARKER = "discord-seen"
 MESSAGE_MARKER = "discord-msg"
 REPLY_MARKER = "<!-- pour-discord -->"
 VOTES_RE = re.compile(r"^\*\*👍 Votes :\*\* \d+$", re.M)
+# « 💡 Idée : », « 🐞 Bug : »… en tête d'un titre (embed de l'appli, post du forum)
+KIND_PREFIX_RE = re.compile(r"^\s*(?:💡|🐞|💬)?\s*(?:(?:idée|idee|bug|autre)\s*:\s*)?", re.I)
+# Variables qui peuvent contenir l'id du salon, la première non vide gagne.
+CHANNEL_ENV = ("DISCORD_FORUM_CHANNEL_ID", "DISCORD_CHANNEL_ID")
+TEXT_CHANNEL_TYPES = (0, 5)  # salon texte, salon d'annonces (15 = forum)
+HAS_THREAD_FLAG = 1 << 5
+THREAD_NAME_MAX = 100
 
 LABELS = {
     "feedback": ("fb6b1a", "Demande venue de la boîte à idées (Discord)"),
@@ -75,7 +87,84 @@ def votes_of(starter: dict | None) -> int:
 
 
 def clean_title(name: str) -> str:
-    return re.sub(r"^\s*(💡|🐞|💬)\s*", "", name).strip() or "Sans titre"
+    return KIND_PREFIX_RE.sub("", name, count=1).strip() or "Sans titre"
+
+
+def channel_id_from(env) -> str:
+    """Id du salon : DISCORD_FORUM_CHANNEL_ID (nom historique), sinon DISCORD_CHANNEL_ID."""
+    for name in CHANNEL_ENV:
+        value = (env.get(name) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def is_text_channel(channel: dict) -> bool:
+    """Salon texte (ou d'annonces) : une demande = un message, le bot ouvre le fil.
+    Sinon (forum) : chaque post est déjà un fil."""
+    return channel.get("type") in TEXT_CHANNEL_TYPES
+
+
+def is_request_message(msg: dict | None, bot_user_id: str | None) -> bool:
+    """Un message d'un salon texte est-il une demande ? Ni épinglé (le « Comment
+    ça marche »), ni de notre bot (« Bien reçu »…), ni système, ni vide. Les
+    messages de l'appli passent par le webhook (bot + webhook_id) : ce sont des
+    demandes."""
+    if not msg or msg.get("pinned"):
+        return False
+    author = msg.get("author") or {}
+    if bot_user_id and str(author.get("id")) == str(bot_user_id):
+        return False
+    if author.get("bot") and not msg.get("webhook_id"):
+        return False
+    if msg.get("type", 0) not in (0, 19):
+        return False
+    return bool((msg.get("content") or "").strip() or msg.get("embeds") or msg.get("attachments"))
+
+
+def needs_thread(msg: dict, bot_user_id: str | None) -> bool:
+    """Demande qui n'a pas encore de fil : le bot doit en ouvrir un dessous."""
+    has_thread = msg.get("thread") or int(msg.get("flags") or 0) & HAS_THREAD_FLAG
+    return is_request_message(msg, bot_user_id) and not has_thread
+
+
+def first_line(text: str) -> str:
+    """Première ligne non vide, sans mentions ni mise en forme Discord."""
+    for line in (text or "").splitlines():
+        line = re.sub(r"<a?(:\w+:)\d+>", r"\1", line)  # émoji perso → :nom:
+        line = re.sub(r"<(?:@[!&]?|#)\d+>", "", line)  # mentions, salons
+        line = re.sub(r"^\s*(?:#{1,3}|>{1,3}|[-*•])\s+", "", line)  # titre, citation, puce
+        line = re.sub(r"\*\*|__|~~|\|\||`", "", line)
+        line = " ".join(line.split())
+        if line:
+            return line
+    return ""
+
+
+def shorten(text: str, limit: int) -> str:
+    """Coupe à `limit` caractères, entre deux mots si possible, avec « … »."""
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 1]
+    if not text[limit - 1].isspace() and " " in cut[limit // 2:]:
+        cut = cut[: cut.rindex(" ")]  # pas de mot coupé en deux
+    return cut.rstrip(" ,;:.!?-–—") + "…"
+
+
+def thread_title(msg: dict) -> str:
+    """Nom du fil ouvert sous une demande d'un salon texte : 1re ligne du message
+    écrit à la main, sinon titre de l'embed de l'appli sans « 💡 Idée : »."""
+    candidates = [msg.get("content") or ""]
+    for e in msg.get("embeds") or []:
+        candidates.append(KIND_PREFIX_RE.sub("", e.get("title") or "", count=1))
+        candidates.append(e.get("description") or "")
+    for text in candidates:
+        line = first_line(text)
+        if line:
+            return shorten(line, THREAD_NAME_MAX)
+    author = msg.get("author") or {}
+    name = author.get("global_name") or author.get("username") or "un pote"
+    return shorten(f"Demande de {name}", THREAD_NAME_MAX)
 
 
 def describe_starter(starter: dict | None) -> tuple[str, str, list[str], str | None]:
@@ -241,11 +330,12 @@ class Http:
 
 def main() -> int:
     token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
-    forum = os.environ.get("DISCORD_FORUM_CHANNEL_ID", "").strip()
+    salon = channel_id_from(os.environ)
     gh_token = os.environ.get("GITHUB_TOKEN", "").strip()
     repo = os.environ.get("GITHUB_REPOSITORY", "").strip()
-    if not token or not forum:
-        print("::notice::DISCORD_BOT_TOKEN / DISCORD_FORUM_CHANNEL_ID absents : synchro Discord ignorée.")
+    if not token or not salon:
+        print("::notice::DISCORD_BOT_TOKEN / DISCORD_FORUM_CHANNEL_ID (ou DISCORD_CHANNEL_ID) absents :"
+              " synchro Discord ignorée.")
         return 0
     if not gh_token or not repo:
         print("::error::GITHUB_TOKEN / GITHUB_REPOSITORY manquants.")
@@ -262,14 +352,10 @@ def main() -> int:
         },
     )
 
-    channel = discord.call("GET", f"/channels/{forum}")
+    channel = discord.call("GET", f"/channels/{salon}")
     guild_id = channel["guild_id"]
+    text_mode = is_text_channel(channel)
     forum_tags = {t["id"]: t.get("name", "") for t in channel.get("available_tags", [])}
-
-    threads = [t for t in discord.call("GET", f"/guilds/{guild_id}/threads/active").get("threads", [])
-               if t.get("parent_id") == forum]
-    archived = discord.call("GET", f"/channels/{forum}/threads/archived/public?limit=50") or {}
-    threads += archived.get("threads", [])
 
     # Étiquettes GitHub
     existing_labels = {l["name"] for l in github.call("GET", f"/repos/{repo}/labels?per_page=100")}
@@ -288,17 +374,55 @@ def main() -> int:
         page += 1
     by_thread = {tid: i for i in issues if (tid := thread_id_of(i))}
 
-    created = copied = errors = 0
+    created = copied = errors = opened = 0
+    threads: list[dict] = []
+    bot_id = None
+    if text_mode:
+        # Salon texte : un fil sous chaque nouvelle demande (parmi les 100 derniers
+        # messages). Le fil prend l'id du message. Une demande qui a déjà un ticket
+        # n'en reçoit pas d'autre (fil supprimé par un modo, par exemple).
+        bot_id = (discord.call("GET", "/users/@me") or {}).get("id")
+        recent = discord.call("GET", f"/channels/{salon}/messages?limit=100") or []
+        for m in sorted(recent, key=lambda m: int(m["id"])):
+            if m["id"] in by_thread or not needs_thread(m, bot_id):
+                continue
+            name = thread_title(m)
+            try:
+                t = discord.call("POST", f"/channels/{salon}/messages/{m['id']}/threads",
+                                 {"name": name, "auto_archive_duration": 10080})
+            except RuntimeError as e:
+                errors += 1
+                print(f"::warning::Impossible d'ouvrir un fil sous le message {m['id']} : {e}")
+                continue
+            threads.append(t or {"id": m["id"], "name": name, "parent_id": salon})
+            opened += 1
+
+    threads += [t for t in discord.call("GET", f"/guilds/{guild_id}/threads/active").get("threads", [])
+                if t.get("parent_id") == salon]
+    archived = discord.call("GET", f"/channels/{salon}/threads/archived/public?limit=50") or {}
+    threads += archived.get("threads", [])
+    unique: dict[str, dict] = {}
+    for t in threads:
+        unique.setdefault(t["id"], t)
+    threads = list(unique.values())
+
     for t in threads:
         tid = t["id"]
         try:
+            # Forum : le 1er message vit dans le fil, avec le même id que lui.
+            # Salon texte : il est dans le salon, et le fil porte son id.
+            starter_path = f"/channels/{salon}/messages/{tid}" if text_mode else f"/channels/{tid}/messages/{tid}"
             try:
-                starter = discord.call("GET", f"/channels/{tid}/messages/{tid}")
+                starter = discord.call("GET", starter_path)
             except RuntimeError:
                 starter = None
             votes = votes_of(starter)
             issue = by_thread.get(tid)
             if issue is None:
+                if text_mode and not is_request_message(starter, bot_id):
+                    # Fil ouvert à la main sous un message qui n'est pas une demande
+                    # (le « Comment ça marche » épinglé…) ou sans message de départ.
+                    continue
                 kind = kind_of(t, starter, forum_tags)
                 prefix = {"bug": "[Bug]", "idée": "[Idée]"}.get(kind, "[Retour]")
                 labels = ["feedback"] + ([kind] if kind in LABELS else [])
@@ -359,7 +483,8 @@ def main() -> int:
             errors += 1
             print(f"::warning::Fil {tid} : {e}")
 
-    print(f"Fils Discord vus : {len(threads)} · nouveaux tickets : {created} · réponses recopiées : {copied}"
+    print(f"Salon {'texte' if text_mode else 'forum'} · fils Discord vus : {len(threads)}"
+          f" · fils ouverts : {opened} · nouveaux tickets : {created} · réponses recopiées : {copied}"
           f" · erreurs : {errors}")
     return 1 if errors else 0
 

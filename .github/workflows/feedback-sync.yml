@@ -1,9 +1,12 @@
 name: Boîte à idées (Discord ↔ GitHub)
 
-# Toutes les heures : les nouveaux fils du forum Discord deviennent des tickets
-# GitHub (étiquette « feedback »), les réponses marquées <!-- pour-discord -->
-# sont repostées dans Discord, et la fermeture d'un ticket est annoncée.
-# Secrets requis : DISCORD_BOT_TOKEN, DISCORD_FORUM_CHANNEL_ID (voir README).
+# Toutes les heures : les nouvelles demandes du salon Discord (salon texte : le
+# bot ouvre un fil sous chaque message ; forum : un post = un fil) deviennent des
+# tickets GitHub (étiquette « feedback »), les réponses marquées
+# <!-- pour-discord --> sont repostées dans Discord, et la fermeture d'un ticket
+# est annoncée.
+# Secrets requis : DISCORD_BOT_TOKEN, DISCORD_FORUM_CHANNEL_ID ou
+# DISCORD_CHANNEL_ID (l'id du salon, texte ou forum ; voir README).
 on:
   schedule:
     - cron: "23 * * * *"
@@ -40,6 +43,7 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_FORUM_CHANNEL_ID: ${{ secrets.DISCORD_FORUM_CHANNEL_ID }}
+          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: python3 tool/feedback/discord_sync.py
