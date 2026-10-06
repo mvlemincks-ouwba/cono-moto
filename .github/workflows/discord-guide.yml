@@ -1,7 +1,7 @@
-name: Message Discord (mode d'emploi)
+name: Message Discord (ponctuel)
 
-# Ponctuel : publie docs/discord/mode-emploi.md dans le salon de la boîte à
-# idées, via le webhook DISCORD_FEEDBACK_WEBHOOK (nouveau fil si c'est un forum).
+# Ponctuel : publie docs/discord/message.md (et l'image docs/discord/*.png s'il
+# y en a une) dans le salon de la boîte à idées, via DISCORD_FEEDBACK_WEBHOOK.
 on:
   push:
     branches: [claude/discord-guide]
@@ -17,44 +17,34 @@ jobs:
           WEBHOOK: ${{ secrets.DISCORD_FEEDBACK_WEBHOOK }}
         run: |
           python3 - <<'PY'
-          import json, os, sys, urllib.error, urllib.request
+          import glob, json, os, sys, urllib.request, uuid
           url = os.environ.get("WEBHOOK", "").strip()
           if not url:
               sys.exit("::error::Secret DISCORD_FEEDBACK_WEBHOOK absent")
-          ua = {"User-Agent": "DiscordBot (https://github.com/mvlemincks-ouwba/cono-moto, 1.0)"}
-
-          def call(method, target, body=None):
-              data = json.dumps(body).encode() if body is not None else None
-              req = urllib.request.Request(target, data=data, method=method, headers=ua)
-              if data is not None:
-                  req.add_header("Content-Type", "application/json")
-              with urllib.request.urlopen(req, timeout=30) as r:
-                  return json.loads(r.read() or b"null")
-
-          info = call("GET", url)
-          print("Webhook :", info.get("name"), "· salon", info.get("channel_id"), "· serveur", info.get("guild_id"))
-
-          lines = open("docs/discord/mode-emploi.md", encoding="utf-8").read().strip().splitlines()
-          title = lines[0].lstrip("# ").strip()
-          content = "\n".join(lines[1:]).strip()
-          payload = {"username": "Cono Moto", "content": content, "thread_name": title,
-                     "allowed_mentions": {"parse": []}}
-          edit = "1556708255861051543"  # message déjà publié : on le corrige
-          if edit:
-              payload.pop("thread_name")
-              payload.pop("username")
-              payload["content"] = "**" + title + "**\n\n" + content
-              msg = call("PATCH", url + "/messages/" + edit, payload)
-              print("Modifié : message", msg.get("id"), "dans", msg.get("channel_id"))
-              sys.exit(0)
-          try:
-              msg = call("POST", url + "?wait=true", payload)
-          except urllib.error.HTTPError as e:
-              if e.code != 400:
-                  raise
-              print("Salon texte (pas un forum) : publication sans fil")
-              payload.pop("thread_name")
-              payload["content"] = "**" + title + "**\n\n" + content
-              msg = call("POST", url + "?wait=true", payload)
+          content = open("docs/discord/message.md", encoding="utf-8").read().strip()
+          if len(content) > 2000:
+              sys.exit(f"::error::Message trop long ({len(content)} caractères)")
+          payload = {"username": "Cono Moto", "content": content, "allowed_mentions": {"parse": []}}
+          images = sorted(glob.glob("docs/discord/*.png"))
+          headers = {"User-Agent": "DiscordBot (https://github.com/mvlemincks-ouwba/cono-moto, 1.0)"}
+          if images:
+              payload["attachments"] = [{"id": 0, "filename": os.path.basename(images[0])}]
+              boundary = uuid.uuid4().hex
+              body = b"".join([
+                  f"--{boundary}\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n"
+                  f"Content-Type: application/json\r\n\r\n".encode(),
+                  json.dumps(payload).encode(),
+                  f"\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"files[0]\"; "
+                  f"filename=\"{os.path.basename(images[0])}\"\r\nContent-Type: image/png\r\n\r\n".encode(),
+                  open(images[0], "rb").read(),
+                  f"\r\n--{boundary}--\r\n".encode(),
+              ])
+              headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+          else:
+              body = json.dumps(payload).encode()
+              headers["Content-Type"] = "application/json"
+          req = urllib.request.Request(url + "?wait=true", data=body, method="POST", headers=headers)
+          with urllib.request.urlopen(req, timeout=30) as r:
+              msg = json.loads(r.read())
           print("Publié : message", msg.get("id"), "dans", msg.get("channel_id"))
           PY
