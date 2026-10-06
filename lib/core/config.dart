@@ -99,4 +99,11 @@ class Endpoints {
 
   /// Recherche d'adresses (Photon / Komoot, sans clé).
   static const geocoder = 'https://photon.komoot.io/api/';
+
+  /// Base Adresse Nationale (adresses françaises officielles, numéros compris,
+  /// sans clé) : Géoplateforme de l'IGN, puis l'ancienne adresse en secours.
+  static const banGeocoders = [
+    'https://data.geopf.fr/geocodage/search',
+    'https://api-adresse.data.gouv.fr/search/',
+  ];
 }

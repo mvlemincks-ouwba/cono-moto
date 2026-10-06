@@ -1,0 +1,58 @@
+{
+  "type": "FeatureCollection",
+  "version": "draft",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-0.716553, 44.896234]},
+      "properties": {
+        "label": "9 Rue Vital Lauba 33160 Saint-Médard-en-Jalles",
+        "score": 0.9712,
+        "housenumber": "9",
+        "id": "33449_2380_00009",
+        "name": "9 Rue Vital Lauba",
+        "postcode": "33160",
+        "citycode": "33449",
+        "x": 403117.86,
+        "y": 6427931.12,
+        "city": "Saint-Médard-en-Jalles",
+        "context": "33, Gironde, Nouvelle-Aquitaine",
+        "type": "housenumber",
+        "importance": 0.6311,
+        "street": "Rue Vital Lauba",
+        "_type": "address"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-0.716890, 44.896701]},
+      "properties": {
+        "label": "Rue Vital Lauba 33160 Saint-Médard-en-Jalles",
+        "score": 0.7021,
+        "id": "33449_2380",
+        "name": "Rue Vital Lauba",
+        "postcode": "33160",
+        "citycode": "33449",
+        "city": "Saint-Médard-en-Jalles",
+        "context": "33, Gironde, Nouvelle-Aquitaine",
+        "type": "street",
+        "importance": 0.5932,
+        "street": "Rue Vital Lauba",
+        "_type": "address"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [3.0, 44.6]},
+      "properties": {
+        "label": "Laubies 48700 Les Laubies",
+        "score": 0.21,
+        "name": "Laubies",
+        "postcode": "48700",
+        "city": "Les Laubies",
+        "context": "48, Lozère, Occitanie",
+        "type": "locality"
+      }
+    }
+  ]
+}
