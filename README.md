@@ -30,6 +30,7 @@ voir ses potes en direct, faire le plein au meilleur prix et savoir à quel poin
 | 📢 **Signalements** | Gravillons, contrôle, danger, huile… visibles par tes potes. |
 | 🏁 **Mode groupe** | Point de regroupement partagé, alerte quand un pote décroche. |
 | 🧾 **Partage des frais** | Façon Tricount : qui a payé quoi, qui doit combien à qui. |
+| 🔄 **Mises à jour automatiques** | Au démarrage, l'app te montre les nouveautés et se met à jour en un appui (Android). Sur iPhone, via SideStore sans ordinateur. |
 | 💡 **Boîte à idées** | Propose une idée ou signale un bug depuis l'app : ça part sur le Discord de la bande, les potes votent 👍, et c'est traité. |
 | 🔗 **Partage de position** | Lien web de suivi en direct pour quelqu'un qui n'a pas l'app (valable 1 h, 4 h ou 12 h). |
 | 🆘 **Détection de chute** | Choc violent puis immobilité → compte à rebours, puis SMS automatique avec ta position à ton contact d'urgence + alerte aux potes (sur iPhone, le SMS est préparé : il reste à appuyer sur Envoyer, [voir plus bas](#-iphone)). |
@@ -46,12 +47,17 @@ prix officiels des carburants, Firebase (offre gratuite) pour les potes, TomTom 
 
 L'APK est compilé automatiquement par GitHub Actions à chaque push.
 
+**Le plus simple (pour les potes)** : une fois le [dépôt public des versions](#5-mises-à-jour-automatiques--gratuit)
+en place, envoie-leur le lien de sa page (`https://github.com/<toi>/cono-moto-releases`) : tout y est expliqué,
+sans compte GitHub, et l'app se met ensuite à jour toute seule.
+
 1. Sur GitHub, onglet **Actions** › dernier run **« APK Android »** réussi › section **Artifacts** › télécharge
    **cono-moto-apk** (un zip qui contient `cono-moto.apk`).
    Sur la branche `main`, l'APK est aussi publié dans la release **« derniere-version »** (onglet *Releases*).
 2. Copie `cono-moto.apk` sur le téléphone et ouvre-le. Android te demandera d'autoriser l'installation
    depuis cette source (« sources inconnues ») : accepte.
 3. Les mises à jour s'installent par-dessus sans perdre tes données (toutes les versions sont signées avec la même clé).
+   Avec le dépôt public des versions, l'app les propose elle-même au démarrage (Réglages › Mises à jour).
 
 ### 🍏 Installer sur iPhone avec Sideloadly (gratuit)
 
@@ -231,7 +237,33 @@ aux questions qu'elle a posées), répond aux potes (sa réponse est repostée d
 étiquettes `accepté` / `à-préciser` / `à-discuter` / `pas-prévu`, et prépare une pull request pour ce qui est
 simple et clair. Tu n'as plus qu'à fusionner : le ticket se ferme et le fil Discord annonce « C'est fait ».
 
-### 5. (Facultatif) Ta propre clé de signature
+### 5. Mises à jour automatiques — gratuit
+
+L'app vérifie au démarrage (au plus toutes les 6 h, jamais pendant une balade) s'il existe une nouvelle version,
+affiche ce qui a changé et, sur Android, la télécharge et l'installe en un appui. La première fois, Android
+demande d'autoriser Cono Moto à installer ses mises à jour ; ensuite, à partir d'Android 12, elles peuvent
+s'installer sans confirmation. Sur iPhone, l'app prévient et la mise à jour passe par SideStore ou Sideloadly.
+
+Le code reste privé : les versions sont publiées dans un **dépôt public séparé** qui ne contient que l'APK, l'IPA
+et leur description (n'importe qui ayant le lien peut télécharger l'app).
+1. Crée le dépôt : <https://github.com/new> › nom **`cono-moto-releases`** › **Public** › coche
+   **Add a README file** › *Create repository*.
+2. Crée un jeton : GitHub › photo de profil › **Settings › Developer settings › Personal access tokens ›
+   Fine-grained tokens › Generate new token** :
+   - *Token name* : `Cono Moto versions` ; *Expiration* : la plus longue proposée (note la date, il faudra le refaire) ;
+   - *Repository access* : **Only select repositories** › `cono-moto-releases` ;
+   - *Permissions* › *Repository permissions* › **Contents : Read and write** ;
+   - *Generate token* et copie-le.
+3. Dans **ce** dépôt (`cono-moto`), secret **`RELEASES_TOKEN`** = le jeton.
+   (Si tu as donné un autre nom au dépôt public, ajoute aussi une *variable* `RELEASES_REPO` = `toi/nom-du-depot`.)
+4. Relance les builds **APK Android** et **IPA iPhone** sur `main` (onglet Actions › *Run workflow*). Ils publient
+   l'APK, l'IPA, `android.json` / `ios.json` (version + quoi de neuf), la source SideStore `sidestore.json`, et le mode
+   d'emploi en page d'accueil du dépôt public (copié depuis [`docs/releases/README.md`](docs/releases/README.md)).
+
+Ensuite, chaque fusion dans `main` publie une nouvelle version. ⚠️ Les téléphones qui ont une version d'avant cette
+fonction doivent installer une fois la nouvelle version à la main (depuis la page du dépôt public) ; ensuite c'est automatique.
+
+### 6. (Facultatif) Ta propre clé de signature
 
 Par défaut, l'APK est signé avec la clé partagée `android/app/cono-shared.keystore` versionnée dans ce dépôt
 privé (pratique pour installer les mises à jour par-dessus). Pour utiliser ta propre clé, ajoute les secrets

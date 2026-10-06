@@ -10,6 +10,8 @@ import '../ride/ride_screen.dart';
 import '../routes/routes_home_screen.dart';
 import '../social/social_home_screen.dart';
 import '../social/social_providers.dart';
+import '../update/update_controller.dart';
+import '../update/update_sheet.dart';
 
 /// Onglet actif de la barre de navigation (modifiable depuis n'importe où).
 class HomeTabNotifier extends Notifier<int> {
@@ -39,10 +41,49 @@ class HomeShell extends ConsumerStatefulWidget {
 }
 
 class _HomeShellState extends ConsumerState<HomeShell> {
+  late final AppLifecycleListener _lifecycle;
+  bool _updatePrompted = false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _recoverRide());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _recoverRide();
+      _checkForUpdate();
+    });
+    _lifecycle = AppLifecycleListener(onResume: _onResume);
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  void _onResume() {
+    // Retour du réglage « Installer des applis inconnues » : l'installation reprend.
+    ref.read(appUpdateProvider.notifier).onResumed();
+    _checkForUpdate();
+  }
+
+  /// Nouvelle version ? On la propose, mais jamais pendant une balade ni
+  /// par-dessus un autre écran.
+  Future<void> _checkForUpdate() async {
+    if (_updatePrompted || !ref.read(appUpdateProvider).autoCheck) return;
+    if (ref.read(rideControllerProvider).isActive) return;
+    final updates = ref.read(appUpdateProvider.notifier);
+    final found = await updates.check();
+    if (found == null || !mounted || !updates.shouldPrompt(found)) return;
+    if (ref.read(rideControllerProvider).isActive || ModalRoute.of(context)?.isCurrent != true) return;
+    _updatePrompted = true;
+    try {
+      await showUpdateSheet(context);
+      // Fenêtre fermée sans lancer la mise à jour : on la repropose demain.
+      final phase = ref.read(appUpdateProvider).phase;
+      if (phase == UpdatePhase.available || phase == UpdatePhase.error) await updates.snooze(found);
+    } finally {
+      _updatePrompted = false;
+    }
   }
 
   /// Balade interrompue (appli tuée, batterie à plat) : on la finalise.
