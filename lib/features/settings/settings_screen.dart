@@ -11,6 +11,7 @@ import '../../data/models/garage.dart';
 import '../../services/feedback/discord_feedback.dart';
 import '../feedback/feedback_screen.dart';
 import '../offline/offline_maps_screen.dart';
+import '../update/update_sheet.dart';
 
 /// Réglages de l'app.
 class SettingsScreen extends ConsumerWidget {
@@ -221,6 +222,8 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: openDiscordInvite,
               ),
           ]),
+          const SectionHeader('Mises à jour'),
+          const _Group(children: [UpdateSettingsTiles()]),
           const SectionHeader('À propos'),
           _Group(children: [
             ListTile(

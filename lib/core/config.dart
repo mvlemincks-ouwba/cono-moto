@@ -34,6 +34,12 @@ class AppConfig {
   /// Lien d'invitation au serveur Discord (facultatif).
   static const discordInviteUrl = String.fromEnvironment('DISCORD_INVITE_URL');
 
+  /// Adresse où sont publiées les versions pour les mises à jour automatiques
+  /// (release « derniere-version » du dépôt public des versions), par ex.
+  /// https://github.com/moi/cono-moto-releases/releases/download/derniere-version.
+  /// Vide : pas de mises à jour automatiques.
+  static const updateBaseUrl = String.fromEnvironment('UPDATE_BASE_URL');
+
   /// Numéro de build et commit (injectés par la CI, « dev » en local).
   static const appVersion = '1.0.0';
   static const appBuild = String.fromEnvironment('APP_BUILD', defaultValue: 'dev');
