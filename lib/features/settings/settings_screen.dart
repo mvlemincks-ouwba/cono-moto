@@ -9,6 +9,7 @@ import '../../core/theme.dart';
 import '../../core/ui/widgets.dart';
 import '../../data/models/garage.dart';
 import '../../services/feedback/discord_feedback.dart';
+import '../backup/backup_tiles.dart';
 import '../feedback/feedback_screen.dart';
 import '../offline/offline_maps_screen.dart';
 import '../ride/dashboard/dashboard_editor.dart';
@@ -248,6 +249,8 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: openDiscordInvite,
               ),
           ]),
+          const SectionHeader('Sauvegarde'),
+          const _Group(children: [BackupSettingsTiles()]),
           const SectionHeader('Mises à jour'),
           const _Group(children: [UpdateSettingsTiles()]),
           const SectionHeader('À propos'),

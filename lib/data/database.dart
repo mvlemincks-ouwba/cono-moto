@@ -10,6 +10,8 @@ class AppDatabase {
 
   final Database db;
 
+  /// Version du schéma, notée dans les sauvegardes (voir backup.dart) : une
+  /// sauvegarde plus récente que l'appli est refusée.
   static const int version = 1;
 
   static Future<AppDatabase> open({DatabaseFactory? factory, String? path}) async {

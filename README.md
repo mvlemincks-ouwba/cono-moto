@@ -40,6 +40,7 @@ voir ses potes en direct, faire le plein au meilleur prix et savoir à quel poin
 | 🔗 **Partage de position** | Lien web de suivi en direct pour quelqu'un qui n'a pas l'app (valable 1 h, 4 h ou 12 h). |
 | 🆘 **Détection de chute** | Choc violent puis immobilité → compte à rebours, puis SMS automatique avec ta position à ton contact d'urgence + alerte aux potes (sur iPhone, le SMS est préparé : il reste à appuyer sur Envoyer, [voir plus bas](#-iphone)). |
 | 📴 **Cartes hors-ligne** | Télécharge une zone ou le couloir d'une balade avant de partir en zone blanche. |
+| 💾 **Sauvegarde** | Toutes tes données (balades, garage, balades à faire, réglages) dans un seul fichier à ranger sur ton Drive, dans Fichiers ou par mail, puis à restaurer sur ton nouveau téléphone, Android comme iPhone. Petit rappel si ta dernière sauvegarde a plus d'un mois. |
 
 Tout est gratuit : cartes OpenFreeMap / OpenStreetMap, itinéraires Valhalla (FOSSGIS), météo Open-Meteo,
 prix officiels des carburants, Firebase (offre gratuite) pour les potes, TomTom (offre gratuite) pour le trafic.
