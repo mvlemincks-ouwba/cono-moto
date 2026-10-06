@@ -20,9 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      # Dépôt public des versions (mises à jour automatiques), voir README.
-      RELEASES_REPO: ${{ vars.RELEASES_REPO || format('{0}/cono-moto-releases', github.repository_owner) }}
-      PUBLISH_UPDATES: ${{ github.ref == 'refs/heads/main' && secrets.RELEASES_TOKEN != '' }}
+      # Mises à jour automatiques : l'appli lit la release « derniere-version »
+      # de ce dépôt (public), voir README.
+      UPDATE_BASE_URL: https://github.com/${{ github.repository }}/releases/download/derniere-version
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,7 +66,6 @@ jobs:
           SHARE_VIEWER_URL: ${{ secrets.SHARE_VIEWER_URL }}
           DISCORD_FEEDBACK_WEBHOOK: ${{ secrets.DISCORD_FEEDBACK_WEBHOOK }}
           DISCORD_INVITE_URL: ${{ secrets.DISCORD_INVITE_URL }}
-          UPDATE_BASE_URL: https://github.com/${{ env.RELEASES_REPO }}/releases/download/derniere-version
           APP_BUILD: ${{ github.run_number }}
           APP_COMMIT: ${{ github.sha }}
         run: |
@@ -110,66 +109,39 @@ jobs:
           path: cono-moto.apk
           retention-days: 30
 
-      # Sur la branche principale : met à jour la release « derniere-version »
-      # pour avoir un lien de téléchargement stable à partager.
-      - name: Release « derniere-version »
-        if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: derniere-version
-          name: Cono Moto (dernière version)
-          prerelease: true
-          make_latest: false
-          body: |
-            APK construit automatiquement depuis `main` (build ${{ github.run_number }}).
-            Installe `cono-moto.apk` sur ton téléphone Android (autorise les sources inconnues).
-            iPhone : `cono-moto-unsigned.ipa` (ajouté par le build « IPA iPhone »), à installer avec
-            Sideloadly, voir la section « Installer sur iPhone » du README.
-          files: cono-moto.apk
-
-      # Mises à jour automatiques : l'APK puis sa description (android.json) dans
-      # la release « derniere-version » du dépôt public. L'appli lit android.json
-      # au démarrage. Nécessite le secret RELEASES_TOKEN (voir README).
+      # Sur main : l'APK puis sa description (android.json) dans la release
+      # « derniere-version », lien stable à partager. L'appli lit android.json
+      # au démarrage pour se mettre à jour ; la page affiche le mode d'emploi.
       - name: Description de la version
-        if: env.PUBLISH_UPDATES == 'true'
+        if: github.ref == 'refs/heads/main'
         run: |
           python3 tool/release/make_manifest.py android \
             --file cono-moto.apk \
             --build ${{ github.run_number }} \
             --version "$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)" \
             --commit ${{ github.sha }} \
-            --base-url "https://github.com/$RELEASES_REPO/releases/download/derniere-version" \
+            --base-url "$UPDATE_BASE_URL" \
             --out build/release
+          python3 tool/release/release_page.py "${{ github.repository }}" build/release/page.md
 
-      - name: Publication de l'APK (dépôt public)
-        if: env.PUBLISH_UPDATES == 'true'
+      - name: Release « derniere-version »
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          repository: ${{ env.RELEASES_REPO }}
-          token: ${{ secrets.RELEASES_TOKEN }}
           tag_name: derniere-version
           name: Cono Moto (dernière version)
+          prerelease: false
           make_latest: true
-          body: |
-            Mode d'emploi : voir la page d'accueil du dépôt.
-            Android : `cono-moto.apk`. iPhone : `cono-moto-unsigned.ipa` (Sideloadly) ou la source `sidestore.json`.
+          body_path: build/release/page.md
           files: cono-moto.apk
 
       # Après l'APK, pour que l'appli ne voie jamais une version pas encore en ligne.
       - name: Annonce de la version (android.json)
-        if: env.PUBLISH_UPDATES == 'true'
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          repository: ${{ env.RELEASES_REPO }}
-          token: ${{ secrets.RELEASES_TOKEN }}
           tag_name: derniere-version
           files: build/release/android.json
-
-      - name: Mode d'emploi du dépôt public
-        if: env.PUBLISH_UPDATES == 'true'
-        env:
-          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
-        run: python3 tool/release/sync_public_readme.py
 
       - name: Release taguée
         if: startsWith(github.ref, 'refs/tags/v')

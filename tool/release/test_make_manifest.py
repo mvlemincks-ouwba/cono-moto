@@ -11,9 +11,9 @@ import unittest
 from unittest import mock
 
 import make_manifest as mm
-import sync_public_readme as readme
+import release_page as page
 
-BASE = "https://github.com/moi/cono-moto-releases/releases/download/derniere-version"
+BASE = "https://github.com/moi/cono-moto/releases/download/derniere-version"
 
 
 class NotesTest(unittest.TestCase):
@@ -95,13 +95,18 @@ class MainTest(unittest.TestCase):
         self.assertEqual(mm.titles(log), ["Radars : zones de danger", "Mises à jour automatiques (#6)"])
 
 
-class ReadmeTest(unittest.TestCase):
+class ReleasePageTest(unittest.TestCase):
     def test_render(self):
-        with open(readme.SOURCE, encoding="utf-8") as f:
-            text = readme.render(f.read(), "moi/cono-moto-releases")
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "page.md")
+            self.assertEqual(page.main(["moi/cono-moto", out]), 0)
+            with open(out, encoding="utf-8") as f:
+                text = f.read()
         self.assertNotIn("{{REPO}}", text)
-        self.assertIn("https://github.com/moi/cono-moto-releases/releases/latest/download/cono-moto.apk", text)
-        self.assertIn("https://github.com/moi/cono-moto-releases/releases/latest/download/sidestore.json", text)
+        # Liens vers la release « derniere-version » (« latest » pourrait être une release v*).
+        self.assertNotIn("/releases/latest/", text)
+        for name in ["cono-moto.apk", "cono-moto-unsigned.ipa", "sidestore.json"]:
+            self.assertIn(f"https://github.com/moi/cono-moto/releases/download/derniere-version/{name}", text)
 
 
 if __name__ == "__main__":

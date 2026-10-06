@@ -49,9 +49,9 @@ prix officiels des carburants, Firebase (offre gratuite) pour les potes, TomTom 
 
 L'APK est compilé automatiquement par GitHub Actions à chaque push.
 
-**Le plus simple (pour les potes)** : une fois le [dépôt public des versions](#5-mises-à-jour-automatiques--gratuit)
-en place, envoie-leur le lien de sa page (`https://github.com/<toi>/cono-moto-releases`) : tout y est expliqué,
-sans compte GitHub, et l'app se met ensuite à jour toute seule.
+**Le plus simple (pour les potes)** : envoie-leur le lien de la page des versions,
+<https://github.com/mvlemincks-ouwba/cono-moto/releases/tag/derniere-version> : tout y est expliqué,
+sans compte GitHub, et l'app se met ensuite à jour toute seule ([détails](#5-mises-à-jour-automatiques--gratuit)).
 
 1. Sur GitHub, onglet **Actions** › dernier run **« APK Android »** réussi › section **Artifacts** › télécharge
    **cono-moto-apk** (un zip qui contient `cono-moto.apk`).
@@ -59,7 +59,7 @@ sans compte GitHub, et l'app se met ensuite à jour toute seule.
 2. Copie `cono-moto.apk` sur le téléphone et ouvre-le. Android te demandera d'autoriser l'installation
    depuis cette source (« sources inconnues ») : accepte.
 3. Les mises à jour s'installent par-dessus sans perdre tes données (toutes les versions sont signées avec la même clé).
-   Avec le dépôt public des versions, l'app les propose elle-même au démarrage (Réglages › Mises à jour).
+   Les versions de `main` sont proposées par l'app elle-même au démarrage (Réglages › Mises à jour).
 
 ### 🍏 Installer sur iPhone avec Sideloadly (gratuit)
 
@@ -235,30 +235,28 @@ affiche ce qui a changé et, sur Android, la télécharge et l'installe en un ap
 demande d'autoriser Cono Moto à installer ses mises à jour ; ensuite, à partir d'Android 12, elles peuvent
 s'installer sans confirmation. Sur iPhone, l'app prévient et la mise à jour passe par SideStore ou Sideloadly.
 
-Le code reste privé : les versions sont publiées dans un **dépôt public séparé** qui ne contient que l'APK, l'IPA
-et leur description (n'importe qui ayant le lien peut télécharger l'app).
-1. Crée le dépôt : <https://github.com/new> › nom **`cono-moto-releases`** › **Public** › coche
-   **Add a README file** › *Create repository*.
-2. Crée un jeton : GitHub › photo de profil › **Settings › Developer settings › Personal access tokens ›
-   Fine-grained tokens › Generate new token** :
-   - *Token name* : `Cono Moto versions` ; *Expiration* : la plus longue proposée (note la date, il faudra le refaire) ;
-   - *Repository access* : **Only select repositories** › `cono-moto-releases` ;
-   - *Permissions* › *Repository permissions* › **Contents : Read and write** ;
-   - *Generate token* et copie-le.
-3. Dans **ce** dépôt (`cono-moto`), secret **`RELEASES_TOKEN`** = le jeton.
-   (Si tu as donné un autre nom au dépôt public, ajoute aussi une *variable* `RELEASES_REPO` = `toi/nom-du-depot`.)
-4. Relance les builds **APK Android** et **IPA iPhone** sur `main` (onglet Actions › *Run workflow*). Ils publient
-   l'APK, l'IPA, `android.json` / `ios.json` (version + quoi de neuf), la source SideStore `sidestore.json`, et le mode
-   d'emploi en page d'accueil du dépôt public (copié depuis [`docs/releases/README.md`](docs/releases/README.md)).
+Rien à configurer : à chaque fusion dans `main`, les builds **APK Android** et **IPA iPhone** publient dans la
+release [**« derniere-version »**](https://github.com/mvlemincks-ouwba/cono-moto/releases/tag/derniere-version)
+de ce dépôt l'APK, l'IPA, `android.json` / `ios.json` (version + quoi de neuf, lus par l'app), la source SideStore
+`sidestore.json` et, en texte de la page, le mode d'emploi pour les potes
+(tiré de [`docs/releases/README.md`](docs/releases/README.md)).
 
-Ensuite, chaque fusion dans `main` publie une nouvelle version. ⚠️ Les téléphones qui ont une version d'avant cette
-fonction doivent installer une fois la nouvelle version à la main (depuis la page du dépôt public) ; ensuite c'est automatique.
+⚠️ Le dépôt doit rester **public** : l'app télécharge ses mises à jour sans compte GitHub. S'il redevenait privé,
+les mises à jour automatiques s'arrêteraient.
+
+Les téléphones qui ont une version d'avant cette fonction doivent installer une fois la nouvelle version à la main
+(depuis la page « derniere-version ») ; ensuite c'est automatique.
 
 ### 6. (Facultatif) Ta propre clé de signature
 
 Par défaut, l'APK est signé avec la clé partagée `android/app/cono-shared.keystore` versionnée dans ce dépôt
-privé (pratique pour installer les mises à jour par-dessus). Pour utiliser ta propre clé, ajoute les secrets
-`KEYSTORE_BASE64` (keystore encodé en base64), `KEYSTORE_PASSWORD`, `KEY_ALIAS` et `KEY_PASSWORD`.
+(pratique pour installer les mises à jour par-dessus). Le dépôt étant public, cette clé et son mot de passe sont
+visibles de tous : quelqu'un pourrait signer une fausse appli qu'Android accepterait comme mise à jour de
+Cono Moto. Les mises à jour de l'app viennent toujours de la release « derniere-version » ; n'installe pas
+d'APK Cono Moto venu d'ailleurs.
+
+Pour utiliser ta propre clé (gardée secrète), ajoute les secrets `KEYSTORE_BASE64` (keystore encodé en base64),
+`KEYSTORE_PASSWORD`, `KEY_ALIAS` et `KEY_PASSWORD`.
 ⚠️ Changer de clé oblige à désinstaller l'ancienne version (les données locales sont perdues).
 
 ---
@@ -267,7 +265,7 @@ privé (pratique pour installer les mises à jour par-dessus). Pour utiliser ta 
 
 - Flutter **3.47** / Dart 3.13, Android et iOS (iOS 15 minimum, imposé par Firebase ; iPhone uniquement).
 - Le build iPhone tourne sur GitHub Actions (macOS) : [`.github/workflows/ios.yml`](.github/workflows/ios.yml),
-  lancé à la main, sur `main` et sur les tags `v*` (les minutes macOS coûtent 10× plus cher).
+  lancé à la main, sur les pull requests vers `main`, sur `main` et sur les tags `v*`.
   En local, il faut un Mac avec Xcode : `flutter build ios --no-codesign` ou `open ios/Runner.xcworkspace`.
 - Architecture : Riverpod 3 (sans génération de code), SQLite (`sqflite`) pour les données locales,
   Firebase Realtime Database pour les potes, MapLibre pour la carte.
