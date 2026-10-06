@@ -1,9 +1,12 @@
 name: Boîte à idées (Discord ↔ GitHub)
 
-# Toutes les heures : les nouveaux fils du forum Discord deviennent des tickets
-# GitHub (étiquette « feedback »), les réponses marquées <!-- pour-discord -->
-# sont repostées dans Discord, et la fermeture d'un ticket est annoncée.
-# Secrets requis : DISCORD_BOT_TOKEN, DISCORD_FORUM_CHANNEL_ID (voir README).
+# Toutes les heures : les nouvelles demandes du salon Discord (salon texte : le
+# bot ouvre un fil sous chaque message ; forum : un post = un fil) deviennent des
+# tickets GitHub (étiquette « feedback »), les réponses marquées
+# <!-- pour-discord --> sont repostées dans Discord, et la fermeture d'un ticket
+# est annoncée.
+# Secrets requis : DISCORD_BOT_TOKEN, DISCORD_FORUM_CHANNEL_ID ou
+# DISCORD_CHANNEL_ID (l'id du salon, texte ou forum ; voir README).
 on:
   schedule:
     - cron: "23 * * * *"
@@ -26,10 +29,14 @@ jobs:
     name: Synchro Discord
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Sur un commentaire ou une fermeture, uniquement pour les tickets « feedback ».
+    # Sur un commentaire ou une fermeture, uniquement pour les tickets « feedback »,
+    # et pour un commentaire, seulement s'il vient du propriétaire ou d'un
+    # collaborateur (dépôt public : n'importe qui peut commenter).
     if: >-
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
-      contains(github.event.issue.labels.*.name, 'feedback')
+      (contains(github.event.issue.labels.*.name, 'feedback') &&
+       (github.event_name != 'issue_comment' ||
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)))
     steps:
       - uses: actions/checkout@v4
 
@@ -40,6 +47,11 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_FORUM_CHANNEL_ID: ${{ secrets.DISCORD_FORUM_CHANNEL_ID }}
+          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
+          # Salon texte : les messages jusqu'à celui-ci (réponse à Do(w)n Jones sur
+          # la recherche d'adresse, 6 octobre) sont antérieurs au bot et déjà
+          # traités (#5, #8, #10) : ignorés.
+          DISCORD_SINCE_ID: ${{ vars.DISCORD_SINCE_ID || '1556996823132930081' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: python3 tool/feedback/discord_sync.py

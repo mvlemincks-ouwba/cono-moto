@@ -198,30 +198,41 @@ Détails dans [`firebase/README.md`](firebase/README.md).
 ### 4. Boîte à idées sur Discord — gratuit
 
 Dans l'app (**Réglages › Communauté**, ou menu ⋮ de l'onglet Potes), chacun peut proposer une idée ou
-signaler un bug, avec une capture d'écran. Ça part dans un **salon forum Discord** : une demande = un fil,
-les potes en discutent et votent 👍. On peut aussi poster directement dans le forum.
+signaler un bug, avec une capture d'écran. Ça part dans un **salon Discord** (salon texte ou forum) :
+une demande = un fil, les potes en discutent et votent 👍. On peut aussi écrire directement dans le salon.
+Dans un **salon texte**, chaque message est une demande et le bot ouvre un fil dessous : pour en discuter,
+réponds dans le fil, pas dans le salon. Dans un **forum**, chaque post est déjà un fil.
 
 **a) Le salon et le webhook (pour l'app)**
-1. Sur ton serveur Discord, crée un salon de type **Forum**, par ex. `💡-idées` (tags facultatifs : « Idée », « Bug »).
+1. Sur ton serveur Discord, crée un salon, par ex. `💡-idées` : un **salon texte** classique, ou un **Forum**
+   (tags facultatifs : « Idée », « Bug »).
 2. Paramètres du salon › **Intégrations › Webhooks › Nouveau webhook** › nomme-le « Cono Moto » › **Copier l'URL**.
 3. Secret GitHub **`DISCORD_FEEDBACK_WEBHOOK`** = cette URL.
 4. (Facultatif) Un lien d'invitation permanent au serveur → secret **`DISCORD_INVITE_URL`** (bouton « Rejoindre le Discord »).
+5. Salon texte : poste un message « 📌 Comment ça marche » (le principe en deux lignes) et **épingle-le**
+   (clic droit › Épingler). Le bot ignore les messages épinglés : celui-là ne deviendra jamais une demande.
 
 > L'URL du webhook est intégrée à l'app : quelqu'un qui décortique l'APK pourrait poster dans ce salon.
 > En cas d'abus, supprime le webhook, crée-en un autre et mets à jour le secret.
 
 **b) Le pont Discord → GitHub (pour que les demandes soient traitées)**
 
-Toutes les heures, le workflow « Boîte à idées » recopie chaque nouveau fil du forum en ticket GitHub
-(étiquette `feedback`), met à jour le nombre de 👍, recopie sur le ticket les réponses des potes dans le fil,
+Toutes les heures, le workflow « Boîte à idées » ouvre un fil sous chaque nouvelle demande (salon texte,
+parmi les 100 derniers messages), recopie chaque nouveau fil en ticket GitHub (étiquette `feedback`) et répond
+« 📌 Bien reçu » dans le fil, met à jour le nombre de 👍, recopie sur le ticket les réponses des potes dans le fil,
 reposte dans Discord les réponses écrites sur le ticket, et annonce « ✅ C'est fait » quand le ticket est fermé.
 1. <https://discord.com/developers/applications> › **New Application** « Cono Moto » › onglet **Bot** › **Reset Token** › copie le jeton
    → secret **`DISCORD_BOT_TOKEN`**. Sur la même page, active **Message Content Intent**.
 2. Onglet **OAuth2 › URL Generator** : scope `bot`, permissions *View Channels*, *Read Message History*,
-   *Send Messages*, *Send Messages in Threads* › ouvre l'URL générée et ajoute le bot à ton serveur.
-3. Dans Discord : Paramètres utilisateur › Avancés › **Mode développeur** ; clic droit sur le forum › **Copier l'identifiant**
-   → secret **`DISCORD_FORUM_CHANNEL_ID`**.
+   *Send Messages*, *Send Messages in Threads*, *Create Public Threads* › ouvre l'URL générée et ajoute le bot
+   à ton serveur. (Bot déjà ajouté sans *Create Public Threads* ? Donne-la-lui dans les permissions du salon.)
+3. Dans Discord : Paramètres utilisateur › Avancés › **Mode développeur** ; clic droit sur le salon › **Copier l'identifiant**
+   → secret **`DISCORD_FORUM_CHANNEL_ID`** (même nom pour un salon texte ; **`DISCORD_CHANNEL_ID`** marche aussi).
 4. Test : onglet **Actions › Boîte à idées (Discord ↔ GitHub) › Run workflow**.
+
+Les messages postés par le webhook sans la fiche de l'appli (mode d'emploi, réponses, annonces) ne deviennent
+jamais des demandes, et dans un salon texte les messages antérieurs à `DISCORD_SINCE_ID` (variable du dépôt,
+réglée dans le workflow sur la mise en route du bot) sont ignorés.
 
 **c) Le traitement** : chaque matin, une routine Claude Code lit les nouveaux tickets `feedback` (et les réponses
 aux questions qu'elle a posées), répond aux potes (sa réponse est repostée dans le fil Discord), trie avec les
