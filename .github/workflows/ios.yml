@@ -42,7 +42,7 @@ jobs:
       # de ce dépôt (public), voir README.
       UPDATE_BASE_URL: https://github.com/${{ github.repository }}/releases/download/derniere-version
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Historique complet sur main : le « quoi de neuf » liste les changements.
           fetch-depth: ${{ github.ref == 'refs/heads/main' && '0' || '1' }}
@@ -128,7 +128,7 @@ jobs:
           /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" build/ios/iphoneos/Runner.app/Info.plist
           /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" build/ios/iphoneos/Runner.app/Info.plist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: cono-moto-ipa
           path: cono-moto-unsigned.ipa
@@ -154,7 +154,7 @@ jobs:
 
       - name: Release « derniere-version »
         if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: derniere-version
           name: Cono Moto (dernière version)
@@ -168,7 +168,7 @@ jobs:
       # Après l'IPA, pour que l'appli ne voie jamais une version pas encore en ligne.
       - name: Annonce de la version (ios.json, sidestore.json)
         if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: derniere-version
           files: |
@@ -177,7 +177,7 @@ jobs:
 
       - name: Release taguée
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: cono-moto-unsigned.ipa
           generate_release_notes: true
