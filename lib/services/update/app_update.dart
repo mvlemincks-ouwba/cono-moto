@@ -25,7 +25,7 @@ enum UpdatePlatform {
 }
 
 /// Une version publiée, décrite par `android.json` / `ios.json` dans la release
-/// « derniere-version » du dépôt public (généré par tool/release/make_manifest.py).
+/// « derniere-version » du dépôt (généré par tool/release/make_manifest.py).
 @immutable
 class UpdateManifest {
   const UpdateManifest({
@@ -108,7 +108,7 @@ class UpdateClient {
         _client = client ?? http.Client(),
         _ownsClient = client == null;
 
-  /// Ex. https://github.com/moi/cono-moto-releases/releases/download/derniere-version
+  /// Ex. https://github.com/moi/cono-moto/releases/download/derniere-version
   final String baseUrl;
   final Duration timeout;
   final http.Client _client;
@@ -118,13 +118,13 @@ class UpdateClient {
 
   Uri fileUri(String name) => Uri.parse('$baseUrl/$name');
 
-  /// Page du dépôt public (mode d'emploi pour iPhone), si c'est GitHub.
+  /// Page de la release (fichiers et mode d'emploi pour iPhone), si c'est GitHub.
   Uri? get pageUri {
     final uri = Uri.tryParse(baseUrl);
     if (uri == null || uri.host != 'github.com') return null;
-    final i = uri.pathSegments.indexOf('releases');
-    if (i != 2) return null;
-    return Uri.https('github.com', '/${uri.pathSegments.take(2).join('/')}');
+    final s = uri.pathSegments;
+    if (s.length != 5 || s[2] != 'releases' || s[3] != 'download') return null;
+    return Uri.https('github.com', '/${s[0]}/${s[1]}/releases/tag/${s[4]}');
   }
 
   /// Dernière version publiée pour [platform].

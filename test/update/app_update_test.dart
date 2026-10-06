@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-const base = 'https://github.com/moi/cono-moto-releases/releases/download/derniere-version';
+const base = 'https://github.com/moi/cono-moto/releases/download/derniere-version';
 
 Map<String, dynamic> manifestJson({int build = 57, int size = 6, String platform = 'android'}) => {
       'platform': platform,
@@ -56,7 +56,8 @@ void main() {
       final m = await client.latest(UpdatePlatform.android);
       expect(asked.toString(), '$base/android.json');
       expect(m.build, 57);
-      expect(client.pageUri.toString(), 'https://github.com/moi/cono-moto-releases');
+      expect(client.pageUri.toString(), 'https://github.com/moi/cono-moto/releases/tag/derniere-version');
+      expect(UpdateClient(baseUrl: 'https://exemple.fr/maj').pageUri, isNull);
     });
 
     test('erreurs en français', () async {

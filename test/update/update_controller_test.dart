@@ -17,7 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../helpers.dart';
 
-const base = 'https://github.com/moi/cono-moto-releases/releases/download/derniere-version';
+const base = 'https://github.com/moi/cono-moto/releases/download/derniere-version';
 const channel = MethodChannel('test/updater');
 
 /// Faux serveur : android.json / ios.json puis le fichier (6 octets).
