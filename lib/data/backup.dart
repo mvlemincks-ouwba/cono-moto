@@ -83,11 +83,13 @@ class AppBackup {
   ///   notifications, SMS), à redonner sur chaque téléphone ;
   /// - `settings.tomtomApiKey` : clé d'API perso, un secret qui n'a rien à
   ///   faire dans un fichier envoyé par mail ou posé sur un Drive ;
-  /// - `ride.hudLayout` : affichage de la balade en cours.
+  /// - `ride.hudLayout` : affichage de la balade en cours ;
+  /// - `crash.*` : rapports de plantage déjà envoyés ou en attente sur ce
+  ///   téléphone (anti-spam, voir CrashReporter).
   ///
   /// Le compte des potes (Firebase) n'est pas dans les préférences : Firebase
   /// le garde de son côté, on se reconnecte sur le nouveau téléphone.
-  static const excludedPrefPrefixes = ['update.', 'backup.'];
+  static const excludedPrefPrefixes = ['update.', 'backup.', 'crash.'];
   static const excludedPrefKeys = {'settings.onboardingDone', 'settings.tomtomApiKey', 'ride.hudLayout'};
 
   /// Marqueurs des valeurs que JSON ne sait pas porter telles quelles.

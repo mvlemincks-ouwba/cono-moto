@@ -273,6 +273,8 @@ void main() {
       'update.snoozedUntil': 456,
       'ride.hudLayout': 'r1|map',
       'backup.lastAt': 1,
+      'crash.seen': '{"abc":1}',
+      'crash.pending': <String>[],
     });
     final data = AppBackup.decode(await AppBackup.export(db, srcPrefs));
     expect(data.prefs.keys.toSet(), {
@@ -290,6 +292,7 @@ void main() {
       'settings.onboardingDone': true,
       'update.lastCheck': 999,
       'backup.lastAt': 42,
+      'crash.seen': '{"def":2}',
     });
     await AppBackup.restore(db, dstPrefs, data);
     expect(dstPrefs.getString('settings.themeMode'), 'light');
@@ -302,6 +305,7 @@ void main() {
     expect(dstPrefs.getBool('settings.onboardingDone'), isTrue);
     expect(dstPrefs.getInt('update.lastCheck'), 999);
     expect(dstPrefs.getInt('backup.lastAt'), 42);
+    expect(dstPrefs.getString('crash.seen'), '{"def":2}');
     expect(dstPrefs.getBool('update.auto'), isNull);
     await db.close();
   });
