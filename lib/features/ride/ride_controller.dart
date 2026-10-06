@@ -48,6 +48,10 @@ class RideSessionState {
     this.maxLeanLeftDeg = 0,
     this.maxLeanRightDeg = 0,
     this.hardBrakeCount = 0,
+    this.longG = 0,
+    this.maxAccelG = 0,
+    this.maxDecelG = 0,
+    this.altitudeM,
     this.track = const [],
     this.gpsAccuracyM,
     this.lastError,
@@ -84,6 +88,17 @@ class RideSessionState {
   final double maxLeanLeftDeg;
   final double maxLeanRightDeg;
   final int hardBrakeCount;
+
+  /// Accélération longitudinale en G (positif = accélération, négatif =
+  /// freinage), estimée d'après la vitesse GPS ; 0 à l'arrêt.
+  final double longG;
+
+  /// Plus forte accélération et plus fort freinage de la balade (G, positifs).
+  final double maxAccelG;
+  final double maxDecelG;
+
+  /// Altitude GPS (null si inconnue).
+  final double? altitudeM;
 
   /// Trace parcourue (simplifiée) pour l'affichage.
   final List<GeoPoint> track;
@@ -144,6 +159,10 @@ class RideSessionState {
     double? maxLeanLeftDeg,
     double? maxLeanRightDeg,
     int? hardBrakeCount,
+    double? longG,
+    double? maxAccelG,
+    double? maxDecelG,
+    Object? altitudeM = _keep,
     List<GeoPoint>? track,
     Object? gpsAccuracyM = _keep,
     Object? lastError = _keep,
@@ -171,6 +190,10 @@ class RideSessionState {
     maxLeanLeftDeg: maxLeanLeftDeg ?? this.maxLeanLeftDeg,
     maxLeanRightDeg: maxLeanRightDeg ?? this.maxLeanRightDeg,
     hardBrakeCount: hardBrakeCount ?? this.hardBrakeCount,
+    longG: longG ?? this.longG,
+    maxAccelG: maxAccelG ?? this.maxAccelG,
+    maxDecelG: maxDecelG ?? this.maxDecelG,
+    altitudeM: identical(altitudeM, _keep) ? this.altitudeM : altitudeM as double?,
     track: track ?? this.track,
     gpsAccuracyM: identical(gpsAccuracyM, _keep) ? this.gpsAccuracyM : gpsAccuracyM as double?,
     lastError: identical(lastError, _keep) ? this.lastError : lastError as String?,
@@ -433,6 +456,8 @@ class RideController extends Notifier<RideSessionState> {
     if (state.status != RideStatus.recording) {
       state = state.copyWith(
         speedKmh: goodFix ? pos.speedKmh : 0,
+        longG: 0,
+        altitudeM: pos.altitude ?? state.altitudeM,
         gpsAccuracyM: pos.accuracyM ?? 0,
         gpsLost: false,
         lastError: null,
@@ -470,6 +495,11 @@ class RideController extends Notifier<RideSessionState> {
       maxLeanLeftDeg: s.maxLeanLeftDeg,
       maxLeanRightDeg: s.maxLeanRightDeg,
       hardBrakeCount: s.hardBrakeCount,
+      // Sous 10 km/h la pente de vitesse GPS n'est que du bruit.
+      longG: goodFix && pos.speedKmh >= 10 ? _lean.speedSlopeMs2 / Geo.g : 0,
+      maxAccelG: s.maxAccelG,
+      maxDecelG: s.maxDecelG,
+      altitudeM: pos.altitude ?? state.altitudeM,
       curveCount: s.curveCount,
       elevationGainM: s.elevationGainM,
       track: _takeTrack(),

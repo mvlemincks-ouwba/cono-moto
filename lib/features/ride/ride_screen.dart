@@ -21,6 +21,8 @@ import '../navigation/navigation_view.dart';
 import '../routes/guidance_banner.dart';
 import '../social/social_sheets.dart';
 import 'crash_alert_screen.dart';
+import 'dashboard/dashboard_body.dart';
+import 'dashboard/dashboard_editor.dart';
 import 'ride_controller.dart';
 import 'ride_summary_screen.dart';
 import 'widgets/lean_gauge.dart';
@@ -477,7 +479,7 @@ class _HudView extends ConsumerWidget {
             ),
             if (hasRoute) const Padding(padding: EdgeInsets.fromLTRB(12, 0, 12, 8), child: GuidanceBanner()),
             const _FuelBanner(),
-            const Expanded(child: _GaugesBody()),
+            const Expanded(child: DashboardBody()),
           ],
         );
         if (landscape) {
@@ -570,6 +572,14 @@ class _TopBar extends ConsumerWidget {
                   onTap: () {
                     Navigator.pop(ctx);
                     showShareLocationSheet(context);
+                  },
+                ),
+                _SheetAction(
+                  icon: Icons.dashboard_customize_rounded,
+                  label: 'Personnaliser le compteur',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Navigator.of(context).push(DashboardViewsScreen.route());
                   },
                 ),
                 _SheetAction(
@@ -762,203 +772,6 @@ void _openStations(BuildContext context, WidgetRef ref) {
   final route = ref.read(activeRouteProvider) ?? ref.read(rideControllerProvider).route;
   final here = ref.read(positionHubProvider)?.point;
   showFuelStationsSheet(context, alongRoute: route?.points, near: here);
-}
-
-// -----------------------------------------------------------------------------
-// Vue compteur
-// -----------------------------------------------------------------------------
-
-class _GaugesBody extends StatelessWidget {
-  const _GaugesBody();
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, c) {
-        final landscape = c.maxWidth > c.maxHeight * 1.1;
-        if (landscape) {
-          final gauge = math.min(c.maxHeight / 0.9, c.maxWidth * 0.45);
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Center(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: SizedBox(
-                        width: math.max(300, c.maxWidth - gauge - 44),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _SpeedReadout(size: math.min(c.maxHeight * 0.42, 150)),
-                            const SizedBox(height: 12),
-                            const _StatTiles(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: _GaugeBlock(size: gauge),
-                ),
-              ],
-            ),
-          );
-        }
-        const tilesHeight = 160.0;
-        final speedSize = (c.maxHeight * 0.2).clamp(72.0, 156.0);
-        final speedBlock = speedSize * 1.05;
-        final gauge = math.max(150.0, math.min(c.maxWidth - 8, (c.maxHeight - tilesHeight - speedBlock - 12) / 0.86));
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            children: [
-              _SpeedReadout(size: speedSize),
-              Expanded(
-                child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: _GaugeBlock(size: gauge),
-                  ),
-                ),
-              ),
-              const _StatTiles(),
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _SpeedReadout extends ConsumerWidget {
-  const _SpeedReadout({required this.size});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final speed = ref.watch(rideControllerProvider.select((s) => s.speedKmh));
-    final paused = ref.watch(rideControllerProvider.select((s) => s.isPaused));
-    final hasFix = ref.watch(rideControllerProvider.select((s) => s.hasFix));
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    final text = !hasFix ? '--' : '${speed < 2 ? 0 : speed.round()}';
-    return Semantics(
-      label: 'Vitesse $text kilomètres heure',
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(
-              text,
-              style: CmTheme.numbers(size: size, color: paused ? muted : Colors.white, weight: FontWeight.w800),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'km/h',
-              style: CmTheme.numbers(size: math.max(18, size * 0.2), color: muted, weight: FontWeight.w600),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GaugeBlock extends ConsumerWidget {
-  const _GaugeBlock({required this.size});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final lean = ref.watch(rideControllerProvider.select((s) => s.leanDeg));
-    final maxL = ref.watch(rideControllerProvider.select((s) => s.maxLeanLeftDeg));
-    final maxR = ref.watch(rideControllerProvider.select((s) => s.maxLeanRightDeg));
-    final paused = ref.watch(rideControllerProvider.select((s) => s.isPaused));
-    final calibrated = ref.watch(rideControllerProvider.select((s) => s.leanCalibrated));
-    final fromGyro = ref.watch(rideControllerProvider.select((s) => s.leanFromGyro));
-    final speed = ref.watch(rideControllerProvider.select((s) => s.speedKmh));
-
-    String? hint;
-    if (paused) {
-      hint = null;
-    } else if (!calibrated && speed < 5) {
-      hint = 'Calibrage de l\'angle… garde le téléphone immobile';
-    } else if (!fromGyro && speed >= 12) {
-      hint = 'Angle estimé via le GPS (moins précis)';
-    }
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        LeanGauge(angleDeg: lean, maxLeftDeg: maxL, maxRightDeg: maxR, size: size, dimmed: paused),
-        if (hint != null) Pill(label: hint, icon: Icons.info_outline_rounded, color: CmColors.sky),
-      ],
-    );
-  }
-}
-
-class _StatTiles extends ConsumerWidget {
-  const _StatTiles();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final distance = ref.watch(rideControllerProvider.select((s) => s.distanceM));
-    final moving = ref.watch(rideControllerProvider.select((s) => s.movingTime));
-    final avg = ref.watch(rideControllerProvider.select((s) => s.avgSpeedKmh));
-    final vmax = ref.watch(rideControllerProvider.select((s) => s.maxSpeedKmh));
-    final curves = ref.watch(rideControllerProvider.select((s) => s.curveCount));
-    final brakes = ref.watch(rideControllerProvider.select((s) => s.hardBrakeCount));
-    final autonomy = ref.watch(autonomyProvider);
-
-    Widget row(List<Widget> children) => Row(
-      children: [
-        for (var i = 0; i < children.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(child: children[i]),
-        ],
-      ],
-    );
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        row([
-          StatTile(
-            compact: true,
-            label: 'Distance',
-            value: distance < 1000 ? Fmt.number(distance) : Fmt.km(distance),
-            unit: distance < 1000 ? 'm' : 'km',
-          ),
-          StatTile(compact: true, label: 'En route', value: Fmt.chrono(moving)),
-          StatTile(compact: true, label: 'Moyenne', value: Fmt.number(avg), unit: 'km/h'),
-        ]),
-        const SizedBox(height: 8),
-        row([
-          if (autonomy != null)
-            StatTile(
-              compact: true,
-              label: 'Autonomie',
-              value: Fmt.number(autonomy.remainingKm),
-              unit: 'km',
-              color: autonomy.low ? CmColors.amber : null,
-            )
-          else
-            StatTile(compact: true, label: 'Freinages', value: '$brakes', color: brakes > 0 ? CmColors.amber : null),
-          StatTile(compact: true, label: 'Max', value: Fmt.number(vmax), unit: 'km/h'),
-          StatTile(compact: true, label: 'Virages', value: '$curves'),
-        ]),
-      ],
-    );
-  }
 }
 
 // -----------------------------------------------------------------------------

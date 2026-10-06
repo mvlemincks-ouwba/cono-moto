@@ -294,6 +294,37 @@ void main() {
     ]);
   });
 
+  testWidgets('09-compteur-piste', (tester) async {
+    await prefs.setString('dash.active', 'piste');
+    await shot(tester, '09-compteur-piste', const RideScreen(initialLayout: HudLayout.gauges), [
+      ridePlatformProvider.overrideWithValue(FakeRidePlatform()),
+      defaultBikeProvider.overrideWithValue(null),
+      rideControllerProvider.overrideWith(() => _FixedRide(RideSessionState(
+            status: RideStatus.recording,
+            rideId: 'r',
+            startedAt: now.subtract(const Duration(minutes: 27)),
+            distanceM: 19600,
+            movingTime: const Duration(minutes: 25),
+            elapsed: const Duration(minutes: 27, seconds: 4),
+            speedKmh: 92.6,
+            maxSpeedKmh: 107,
+            avgSpeedKmh: 47,
+            leanDeg: 24,
+            maxLeanLeftDeg: 30,
+            maxLeanRightDeg: 28,
+            hardBrakeCount: 1,
+            longG: -0.42,
+            maxAccelG: 0.31,
+            maxDecelG: 0.68,
+            curveCount: 27,
+            gpsAccuracyM: 4,
+            leanCalibrated: true,
+            leanFromGyro: true,
+            crashDetectionArmed: true,
+          ))),
+    ]);
+  });
+
   testWidgets('02-garage', (tester) async {
     final o = await dbOverrides(tester);
     await shot(tester, '02-garage', const GarageScreen(), o, height: 1500);
