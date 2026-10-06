@@ -52,6 +52,7 @@ class AppSettings {
     this.hardBrakeThresholdG = 0.45,
     this.onboardingDone = false,
     this.rideMapFirst = true,
+    this.mapHighContrast = true,
   });
 
   final ThemeMode themeMode;
@@ -91,6 +92,10 @@ class AppSettings {
   /// plutôt que le compteur. Le compteur reste accessible d'un geste.
   final bool rideMapFirst;
 
+  /// Carte sombre : rues plus claires et plus larges, noms plus lisibles
+  /// (repérage des intersections en navigation de nuit).
+  final bool mapHighContrast;
+
   /// Clé TomTom effective.
   String get effectiveTomtomKey =>
       tomtomApiKey.trim().isNotEmpty ? tomtomApiKey.trim() : AppConfig.tomtomApiKey;
@@ -117,6 +122,7 @@ class AppSettings {
     double? hardBrakeThresholdG,
     bool? onboardingDone,
     bool? rideMapFirst,
+    bool? mapHighContrast,
   }) =>
       AppSettings(
         themeMode: themeMode ?? this.themeMode,
@@ -138,6 +144,7 @@ class AppSettings {
         hardBrakeThresholdG: hardBrakeThresholdG ?? this.hardBrakeThresholdG,
         onboardingDone: onboardingDone ?? this.onboardingDone,
         rideMapFirst: rideMapFirst ?? this.rideMapFirst,
+        mapHighContrast: mapHighContrast ?? this.mapHighContrast,
       );
 
   Map<String, Object> toPrefs() => {
@@ -160,6 +167,7 @@ class AppSettings {
         'hardBrakeThresholdG': hardBrakeThresholdG,
         'onboardingDone': onboardingDone,
         'rideMapFirst': rideMapFirst,
+        'mapHighContrast': mapHighContrast,
       };
 
   factory AppSettings.fromPrefs(SharedPreferences p) {
@@ -187,6 +195,7 @@ class AppSettings {
       hardBrakeThresholdG: p.getDouble('settings.hardBrakeThresholdG') ?? d.hardBrakeThresholdG,
       onboardingDone: b('onboardingDone', d.onboardingDone),
       rideMapFirst: b('rideMapFirst', d.rideMapFirst),
+      mapHighContrast: b('mapHighContrast', d.mapHighContrast),
     );
   }
 }

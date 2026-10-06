@@ -168,6 +168,13 @@ class SettingsScreen extends ConsumerWidget {
               subtitle: Text(s.mapStyle.label),
               onTap: () => _pickMapStyle(context, ref),
             ),
+            SwitchListTile(
+              secondary: const Icon(Icons.contrast_rounded),
+              title: const Text('Rues bien visibles la nuit'),
+              subtitle: const Text('Carte sombre : rues plus claires et plus larges, noms plus lisibles'),
+              value: s.mapHighContrast,
+              onChanged: (v) => n.update((x) => x.copyWith(mapHighContrast: v)),
+            ),
             ListTile(
               leading: const Icon(Icons.dark_mode_outlined),
               title: const Text('Thème'),
