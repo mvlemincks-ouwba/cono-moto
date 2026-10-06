@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/config.dart';
 import '../../core/providers.dart';
 import '../../data/models/planned_route.dart';
 import '../../services/routing/elevation_client.dart';
@@ -39,7 +40,7 @@ final elevationClientProvider = Provider<ElevationClient>((ref) {
 });
 
 final geocoderProvider = Provider<Geocoder>((ref) {
-  final c = Geocoder();
+  final c = Geocoder(banEndpoints: Endpoints.banGeocoders);
   ref.onDispose(c.close);
   return c;
 });

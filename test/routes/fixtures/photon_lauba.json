@@ -1,0 +1,23 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-0.716805, 44.896512]},
+      "properties": {
+        "osm_type": "W", "osm_id": 123, "name": "Rue Vital Lauba", "postcode": "33160",
+        "city": "Saint-Médard-en-Jalles", "county": "Gironde", "state": "Nouvelle-Aquitaine",
+        "country": "France", "countrycode": "FR", "type": "street"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [3.36, 44.60]},
+      "properties": {
+        "osm_type": "N", "osm_id": 456, "housenumber": "9", "street": "Rue de la Ratière", "postcode": "48700",
+        "city": "Les Laubies", "county": "Lozère", "state": "Occitanie",
+        "country": "France", "countrycode": "FR", "type": "house"
+      }
+    }
+  ]
+}
