@@ -11,6 +11,7 @@ import '../../data/models/garage.dart';
 import '../../services/feedback/discord_feedback.dart';
 import '../feedback/feedback_screen.dart';
 import '../offline/offline_maps_screen.dart';
+import '../ride/dashboard/dashboard_editor.dart';
 import '../update/update_sheet.dart';
 
 /// Réglages de l'app.
@@ -74,6 +75,13 @@ class SettingsScreen extends ConsumerWidget {
               subtitle: const Text('La balade s\'ouvre sur la carte façon GPS (sinon sur le compteur)'),
               value: s.rideMapFirst,
               onChanged: (v) => n.update((x) => x.copyWith(rideMapFirst: v)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.dashboard_customize_outlined),
+              title: const Text('Vues du compteur'),
+              subtitle: const Text('Choisis les infos affichées : Balade, Piste, Trail…'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => Navigator.of(context).push(DashboardViewsScreen.route()),
             ),
             SwitchListTile(
               secondary: const Icon(Icons.record_voice_over_outlined),

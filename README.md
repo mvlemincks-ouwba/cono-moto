@@ -5,6 +5,7 @@ voir ses potes en direct, faire le plein au meilleur prix et savoir à quel poin
 
 <p>
   <img src="docs/screenshots/01-compteur.png" width="200" alt="Compteur en balade">
+  <img src="docs/screenshots/09-compteur-piste.png" width="200" alt="Vue compteur Piste avec le cercle des G">
   <img src="docs/screenshots/02-garage.png" width="200" alt="Garage">
   <img src="docs/screenshots/03-historique.png" width="200" alt="Historique">
   <img src="docs/screenshots/05-balades.png" width="200" alt="Balades à faire">
@@ -30,6 +31,7 @@ voir ses potes en direct, faire le plein au meilleur prix et savoir à quel poin
 | 📢 **Signalements** | Gravillons, contrôle, danger, huile… visibles par tes potes. |
 | 🏁 **Mode groupe** | Point de regroupement partagé, alerte quand un pote décroche. |
 | 🧾 **Partage des frais** | Façon Tricount : qui a payé quoi, qui doit combien à qui. |
+| 📟 **Compteur à ta façon** | Des vues compteur par activité (Balade, Piste, Trail, Tranquille… ou les tiennes) qu'on fait défiler en roulant ; tu choisis les infos affichées, dont le **cercle des G** (accélération, freinage, force en virage). |
 | 🔄 **Mises à jour automatiques** | Au démarrage, l'app te montre les nouveautés et se met à jour en un appui (Android). Sur iPhone, via SideStore sans ordinateur. |
 | 💡 **Boîte à idées** | Propose une idée ou signale un bug depuis l'app : ça part sur le Discord de la bande, les potes votent 👍, et c'est traité. |
 | 🔗 **Partage de position** | Lien web de suivi en direct pour quelqu'un qui n'a pas l'app (valable 1 h, 4 h ou 12 h). |
