@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
+import 'core/crash_reporter.dart';
 import 'core/notifications.dart';
 import 'core/providers.dart';
 import 'core/settings.dart';
@@ -21,6 +24,8 @@ Future<void> main() async {
   GoogleFonts.config.allowRuntimeFetching = true;
 
   final prefs = await SharedPreferences.getInstance();
+  // Plantages : rapport automatique sur le Discord (versions publiées seulement).
+  final crashes = CrashReporter(prefs: prefs)..install();
   final db = await AppDatabase.open();
   await Notifications.init();
   await initFirebase();
@@ -34,4 +39,7 @@ Future<void> main() async {
       child: const ConoMotoApp(),
     ),
   );
+  // Rapports restés en attente faute de réseau : renvoyés en tâche de fond,
+  // une fois l'appli lancée.
+  unawaited(crashes.flushPending(delay: const Duration(seconds: 10)));
 }

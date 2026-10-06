@@ -214,6 +214,32 @@ class TextChannelLogicTest(unittest.TestCase):
                       "attachments": [{"url": "https://cdn/x.png"}]}
         self.assertEqual(ds.thread_title(only_image), "Demande de Seb")
 
+    def test_crash_report_from_app(self):
+        # Rapport de plantage envoyé tout seul par l'appli (lib/core/crash_reporter.dart) :
+        # une demande de type bug comme une autre, sans pseudo.
+        crash = {
+            "id": "700", "type": 0, "webhook_id": "1", "author": WEBHOOK, "content": "",
+            "embeds": [{
+                "title": "💥 Plantage : StateError dans RideController.stop",
+                "description": "```\nBad state: No element\n```\n**Écran :** RideScreen\n\n"
+                               "**Pile d'appels**\n```\nRideController.stop (package:cono_moto/x.dart:1:1)\n```",
+                "fields": [
+                    {"name": "Type", "value": "🐞 Bug"},
+                    {"name": "Appli", "value": "v1.0.0 (build 12)"},
+                    {"name": "Téléphone", "value": "Android 15"},
+                ],
+            }],
+        }
+        self.assertTrue(ds.is_app_post(crash))
+        self.assertTrue(ds.is_request_message(crash, "8"))
+        thread = {"id": "700", "name": "💥 Plantage : StateError dans RideController.stop", "applied_tags": []}
+        self.assertEqual(ds.kind_of(thread, crash, {}), "bug")
+        self.assertEqual(ds.thread_title(crash), "💥 Plantage : StateError dans RideController.stop")
+        body = ds.issue_body(thread, crash, "999", 0)
+        self.assertIn("RideController.stop (package:cono_moto/x.dart:1:1)", body)
+        self.assertIn("**De :** Cono Moto", body)
+        self.assertIn("- Appli : v1.0.0 (build 12)", body)
+
     def test_clean_title_without_kind_prefix(self):
         self.assertEqual(ds.clean_title("🐞 Bug : La carte se fige"), "La carte se fige")
         self.assertEqual(ds.clean_title("Idée: mode pluie"), "mode pluie")
