@@ -44,9 +44,10 @@ jobs:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_FORUM_CHANNEL_ID: ${{ secrets.DISCORD_FORUM_CHANNEL_ID }}
           DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
-          # Salon texte : les messages jusqu'à celui-ci (réponse à Do(w)n Jones,
-          # 6 octobre) sont antérieurs au bot et déjà traités (#5) : ignorés.
-          DISCORD_SINCE_ID: ${{ vars.DISCORD_SINCE_ID || '1556992526135726113' }}
+          # Salon texte : les messages jusqu'à celui-ci (réponse à Do(w)n Jones sur
+          # le contraste de la carte, 6 octobre) sont antérieurs au bot et déjà
+          # traités (#5, #8) : ignorés.
+          DISCORD_SINCE_ID: ${{ vars.DISCORD_SINCE_ID || '1556994730871758850' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: python3 tool/feedback/discord_sync.py
