@@ -1,10 +1,14 @@
-Et pour le bug de l'adresse, merci Do(w)n Jones, l'exemple était parfait 🔍
+Salut Do(w)n Jones 👋 Tes trois idées sont dans la nouvelle version de Cono Moto, dispo maintenant :
+• 📟 **Compteur à ta façon** : des vues par activité (Balade, Piste, Trail, Tranquille… ou les tiennes) qu'on fait défiler en roulant, les infos de ton choix et le **cercle des G** ;
+• 🌙 **Rues bien visibles la nuit** sur la carte sombre, pour repérer les intersections ;
+• 🔍 **Recherche d'adresse corrigée** : « 9 rue vital lauba 33160 » tombe pile au bon endroit.
 
-Le souci : la recherche ne passait que par OpenStreetMap, où il manque plein de numéros de maison en France. Donc pour « 9 rue Vital Lauba », seule la rue était connue, et en prime il te sortait un faux « 9 rue » en Lozère 🙃
+En bonus : 📸 une image de ta balade à partager (exemple ci-dessous), 💾 une sauvegarde de tes données (Réglages › Sauvegarde) et des mises à jour 2,5× plus légères.
 
-C'est corrigé :
-• la recherche interroge aussi la **Base Adresse Nationale** (l'annuaire officiel des adresses françaises) : « 9 rue vital lauba 33160 » tombe pile sur le n°9 à Saint-Médard-en-Jalles ;
-• quand tu tapes une adresse, les adresses officielles passent en premier ; pour un col, une ville ou un lieu, rien ne change ;
-• si tu mets un code postal, les résultats d'ailleurs sont écartés : fini la Lozère.
+👉 À installer **une seule fois à la main** depuis cette page : <https://github.com/mvlemincks-ouwba/cono-moto/releases/tag/derniere-version>
+• Android : télécharge `cono-moto.apk` et installe-le par-dessus l'ancienne, tes balades sont gardées.
+• iPhone : suis la partie iPhone de la page (SideStore ou Sideloadly).
 
-Ce sera dans la prochaine version avec le reste. Si tu tombes encore sur une adresse introuvable, envoie-la, c'est super utile 🙏
+Ensuite, plus rien à faire : l'appli te propose toute seule les nouvelles versions au démarrage 🔄
+
+Merci pour tes retours, continue ! Une idée ou un bug : poste-le ici, un fil s'ouvre dessous pour en discuter 🙏
