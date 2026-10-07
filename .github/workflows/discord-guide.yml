@@ -24,7 +24,11 @@ jobs:
           content = open("docs/discord/message.md", encoding="utf-8").read().strip()
           if len(content) > 2000:
               sys.exit(f"::error::Message trop long ({len(content)} caractères)")
-          payload = {"username": "Cono Moto", "content": content, "allowed_mentions": {"parse": []}}
+          # Seules les personnes citées explicitement (<@id>) sont notifiées.
+          import re
+          users = sorted(set(re.findall(r"<@!?(\d+)>", content)))
+          payload = {"username": "Cono Moto", "content": content,
+                     "allowed_mentions": {"parse": [], "users": users}}
           images = sorted(glob.glob("docs/discord/*.png"))
           headers = {"User-Agent": "DiscordBot (https://github.com/mvlemincks-ouwba/cono-moto, 1.0)"}
           if images:
