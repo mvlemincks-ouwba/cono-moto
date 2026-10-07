@@ -8,6 +8,7 @@ import '../history/history_screen.dart';
 import '../history/ride_detail_screen.dart';
 import '../map/map_screen.dart';
 import '../ride/ride_controller.dart';
+import '../ride/ride_display.dart';
 import '../ride/ride_screen.dart';
 import '../routes/routes_home_screen.dart';
 import '../social/social_home_screen.dart';
@@ -53,7 +54,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       _recoverRide();
       _checkForUpdate();
     });
-    _lifecycle = AppLifecycleListener(onResume: _onResume);
+    _lifecycle = AppLifecycleListener(
+      onResume: _onResume,
+      // Écran éteint ou appli en arrière-plan : capteurs ralentis en balade.
+      onShow: () => ref.read(rideDisplayProvider).foreground = true,
+      onHide: () => ref.read(rideDisplayProvider).foreground = false,
+    );
   }
 
   @override

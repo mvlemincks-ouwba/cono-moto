@@ -29,6 +29,10 @@ class FakeRidePlatform implements RidePlatform {
   final screenOn = <bool>[];
   int vibrations = 0;
 
+  /// Fréquences demandées, dans l'ordre (true = ≈ 50 Hz).
+  final gyroRates = <bool>[];
+  final accRates = <bool>[];
+
   void advance(Duration d) => clock = clock.add(d);
 
   @override
@@ -41,10 +45,16 @@ class FakeRidePlatform implements RidePlatform {
   Stream<RiderPosition> positions() => gps.stream;
 
   @override
-  Stream<SensorSample> gyroscope() => gyro.stream;
+  Stream<SensorSample> gyroscope({bool fast = true}) {
+    gyroRates.add(fast);
+    return gyro.stream;
+  }
 
   @override
-  Stream<SensorSample> accelerometer() => acc.stream;
+  Stream<SensorSample> accelerometer({bool fast = true}) {
+    accRates.add(fast);
+    return acc.stream;
+  }
 
   @override
   Future<void> requestNotificationPermission() async {}

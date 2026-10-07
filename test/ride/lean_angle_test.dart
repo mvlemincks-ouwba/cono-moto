@@ -36,10 +36,17 @@ class Mat3 {
 }
 
 /// Simulateur de moto : repère moto (avant, gauche, haut), téléphone monté
-/// avec une orientation quelconque [mount], capteurs à 50 Hz, GPS à 1 Hz.
+/// avec une orientation quelconque [mount], capteurs à 50 Hz (une mesure toutes
+/// les [sampleMs] ms), GPS à 1 Hz.
 class BikeSim {
-  BikeSim(this.est, {Mat3? mount, this.withSensors = true, this.noiseSeed, this.gyroBias = Vec3.zero})
-    : mount = mount ?? Mat3.rotZ(0.35) * Mat3.rotX(1.15) * Mat3.rotY(-0.2),
+  BikeSim(
+    this.est, {
+    Mat3? mount,
+    this.withSensors = true,
+    this.noiseSeed,
+    this.gyroBias = Vec3.zero,
+    this.sampleMs = 20,
+  }) : mount = mount ?? Mat3.rotZ(0.35) * Mat3.rotX(1.15) * Mat3.rotY(-0.2),
       _rnd = noiseSeed == null ? null : math.Random(noiseSeed);
 
   final LeanAngleEstimator est;
@@ -47,6 +54,7 @@ class BikeSim {
   final bool withSensors;
   final int? noiseSeed;
   final Vec3 gyroBias;
+  final int sampleMs;
   final math.Random? _rnd;
 
   DateTime t = DateTime.utc(2026, 6, 7, 9);
@@ -76,11 +84,11 @@ class BikeSim {
     double accNoise = 0,
     bool gpsHeading = true,
   }) {
-    const dt = 0.02;
+    final dt = sampleMs / 1000;
     final steps = (seconds / dt).round();
     for (var i = 0; i < steps; i++) {
       _step++;
-      t = t.add(const Duration(milliseconds: 20));
+      t = t.add(Duration(milliseconds: sampleMs));
       final phi = math.atan(-speedMs * yawRate / Geo.g);
       trueLeanDeg = phi * 180 / math.pi;
       if (withSensors) {
@@ -94,7 +102,7 @@ class BikeSim {
       }
       heading = (heading - yawRate * dt * 180 / math.pi) % 360;
       if (speedMs > 0) pos = Geo.destination(pos, heading, speedMs * dt);
-      if (_step % 50 == 0) {
+      if (_step % (1000 ~/ sampleMs) == 0) {
         est.addGps(t, speedMs, headingDeg: gpsHeading ? heading : null, position: pos);
       }
     }
@@ -128,6 +136,20 @@ void main() {
       sim.run(speedMs: kmh60, yawRate: -kmh60 / 50, seconds: 6);
       expect(est.source, LeanSource.gyroscope);
       expect(est.leanDeg, closeTo(expected60r50, 1.0));
+    });
+
+    test('capteurs ralentis (≈ 15 Hz, écran éteint) : même angle à ±1°', () {
+      for (final right in [true, false]) {
+        final est = LeanAngleEstimator();
+        final sim = BikeSim(est, sampleMs: 66, noiseSeed: 7);
+        sim.run(speedMs: 0, seconds: 4, gyroNoise: 0.01, accNoise: 0.05);
+        expect(est.calibrated, isTrue);
+        sim.run(speedMs: kmh60, seconds: 3, gyroNoise: 0.01, accNoise: 0.05);
+        final yaw = (right ? -1 : 1) * kmh60 / 50;
+        sim.run(speedMs: kmh60, yawRate: yaw, seconds: 6, gyroNoise: 0.01, accNoise: 0.05);
+        expect(est.source, LeanSource.gyroscope);
+        expect(est.leanDeg, closeTo((right ? 1 : -1) * expected60r50, 1.0));
+      }
     });
 
     test('virage à gauche → angle négatif', () {

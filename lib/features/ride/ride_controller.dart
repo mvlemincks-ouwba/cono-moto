@@ -27,6 +27,7 @@ import '../garage/autonomy.dart';
 import '../garage/maintenance_reminders.dart';
 import 'crash_alert_controller.dart';
 import 'crash_alert_screen.dart';
+import 'ride_display.dart';
 
 enum RideStatus { idle, starting, recording, paused, finishing }
 
@@ -234,6 +235,9 @@ class RideController extends Notifier<RideSessionState> {
   StreamSubscription<RiderPosition>? _gpsSub;
   StreamSubscription<SensorSample>? _gyroSub;
   StreamSubscription<SensorSample>? _accSub;
+  RideDisplay? _display;
+  bool? _gyroFast;
+  bool? _accFast;
   Timer? _ticker;
   ProviderSubscription<AutonomyInfo?>? _autonomySub;
 
@@ -336,16 +340,10 @@ class RideController extends Notifier<RideSessionState> {
           }
         },
       );
-      _gyroSub = platform.gyroscope().listen(
-        _onGyro,
-        onError: (Object e) => debugPrint('Gyroscope indisponible : $e'),
-        cancelOnError: true,
-      );
-      _accSub = platform.accelerometer().listen(
-        _onAccel,
-        onError: (Object e) => debugPrint('Accéléromètre indisponible : $e'),
-        cancelOnError: true,
-      );
+      final display = ref.read(rideDisplayProvider);
+      _display = display;
+      display.addListener(_applySensorRates);
+      _applySensorRates();
       _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) => _onTick());
       _listenAutonomy();
       if (settings.keepScreenOn) unawaited(platform.keepScreenOn(true));
@@ -511,6 +509,36 @@ class RideController extends Notifier<RideSessionState> {
     );
   }
 
+  /// Fréquence des capteurs (batterie) : le gyroscope ne sert qu'à l'angle,
+  /// ≈ 50 Hz s'il est à l'écran, ≈ 15 Hz sinon (écran éteint, appli en
+  /// arrière-plan, écran de balade réduit) : l'angle reste enregistré pour
+  /// l'historique, avec trois fois moins de réveils. L'accéléromètre garde
+  /// 50 Hz tant que la détection de chute est active (pics de choc).
+  void _applySensorRates() {
+    if (_ride == null || !ref.mounted) return;
+    final shown = _display?.leanVisible ?? true;
+    final gyroFast = shown;
+    final accFast = shown || _crashDetectionOn;
+    if (gyroFast != _gyroFast) {
+      _gyroFast = gyroFast;
+      unawaited(_gyroSub?.cancel());
+      _gyroSub = _platform.gyroscope(fast: gyroFast).listen(
+        _onGyro,
+        onError: (Object e) => debugPrint('Gyroscope indisponible : $e'),
+        cancelOnError: true,
+      );
+    }
+    if (accFast != _accFast) {
+      _accFast = accFast;
+      unawaited(_accSub?.cancel());
+      _accSub = _platform.accelerometer(fast: accFast).listen(
+        _onAccel,
+        onError: (Object e) => debugPrint('Accéléromètre indisponible : $e'),
+        cancelOnError: true,
+      );
+    }
+  }
+
   void _onGyro(SensorSample s) {
     if (_ride == null) return;
     _lean.addGyroscope(s.time, s.x, s.y, s.z);
@@ -535,12 +563,15 @@ class RideController extends Notifier<RideSessionState> {
     final everySecond = _tickCount % 10 == 0;
 
     if (!everySecond) {
-      if ((lean - state.leanDeg).abs() >= 0.3) state = state.copyWith(leanDeg: lean);
+      // Au plus 10 redessins par seconde (ce minuteur), et pas pour les
+      // tremblements de moins d'un demi-degré.
+      if ((lean - state.leanDeg).abs() >= 0.5) state = state.copyWith(leanDeg: lean);
       return;
     }
 
     final settings = ref.read(settingsProvider);
     _crashDetectionOn = settings.crashDetection;
+    _applySensorRates();
     if (_crashDetectionOn && st == RideStatus.recording && _crash.tick(now)) _onCrashSuspected();
 
     final lastFix = _lastFixAt;
@@ -880,6 +911,9 @@ class RideController extends Notifier<RideSessionState> {
   Future<void> _stopStreams() async {
     _ticker?.cancel();
     _ticker = null;
+    _display?.removeListener(_applySensorRates);
+    _display = null;
+    _gyroFast = _accFast = null;
     _autonomySub?.close();
     _autonomySub = null;
     final subs = [_gpsSub, _gyroSub, _accSub];
@@ -909,6 +943,7 @@ class RideController extends Notifier<RideSessionState> {
 
   void _disposeResources() {
     _ticker?.cancel();
+    _display?.removeListener(_applySensorRates);
     _autonomySub?.close();
     _gpsSub?.cancel();
     _gyroSub?.cancel();

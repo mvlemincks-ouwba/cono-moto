@@ -29,6 +29,8 @@ class _FixedRideController extends RideController {
 
   @override
   RideSessionState build() => initial;
+
+  void setLean(double deg) => state = state.copyWith(leanDeg: deg);
 }
 
 const _sizes = <String, Size>{
@@ -209,6 +211,33 @@ void main() {
       await tester.tap(find.text('JE VAIS BIEN'));
       await tester.pump(const Duration(milliseconds: 300));
       expect(container.read(crashAlertProvider).phase, CrashAlertPhase.idle);
+    });
+  }
+
+  for (final mapFirst in [false, true]) {
+    testWidgets('batterie : en balade, l\'écran ne se redessine pas en continu (${mapFirst ? 'plan' : 'compteur'})', (
+      tester,
+    ) async {
+      await _pumpApp(
+        tester,
+        const RideScreen(),
+        size: _sizes['téléphone']!,
+        initialPrefs: {'settings.rideMapFirst': mapFirst},
+        overrides: [rideControllerProvider.overrideWith(() => _FixedRideController(_activeState))],
+      );
+      await tester.pump(const Duration(seconds: 2));
+      // Aucune animation en boucle (point REC, jauges) : sans changement de
+      // valeur, plus aucune image n'est demandée.
+      expect(tester.binding.hasScheduledFrame, isFalse);
+
+      // Nouvel angle (jusqu'à 10 fois par seconde en balade) : une seule image,
+      // pas d'animation de 200 ms relancée à chaque fois.
+      final container = ProviderScope.containerOf(tester.element(find.byType(RideScreen)));
+      final ctrl = container.read(rideControllerProvider.notifier) as _FixedRideController;
+      ctrl.setLean(12);
+      await tester.pump();
+      expect(tester.binding.hasScheduledFrame, isFalse);
+      expect(find.text('12°'), mapFirst ? findsOneWidget : findsNothing);
     });
   }
 

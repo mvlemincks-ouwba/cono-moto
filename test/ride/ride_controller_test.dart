@@ -10,6 +10,7 @@ import 'package:cono_moto/data/models/ride.dart';
 import 'package:cono_moto/features/garage/autonomy.dart';
 import 'package:cono_moto/features/ride/crash_alert_controller.dart';
 import 'package:cono_moto/features/ride/ride_controller.dart';
+import 'package:cono_moto/features/ride/ride_display.dart';
 import 'package:cono_moto/services/ride/ride_platform.dart';
 import 'package:cono_moto/services/ride/ride_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -285,6 +286,47 @@ void main() {
 
     final ride = await h.ctrl.stop();
     expect(ride!.events.where((e) => e.type == 'crash'), hasLength(1));
+    await h.dispose();
+  });
+
+  test('batterie : capteurs à 50 Hz seulement si l\'angle est à l\'écran', () async {
+    final h = await Harness.create();
+    final display = h.container.read(rideDisplayProvider);
+    display.hudShown();
+    expect(await h.ctrl.start(), isTrue);
+    expect(h.platform.gyroRates, [true]);
+    expect(h.platform.accRates, [true]);
+
+    // Écran éteint : gyroscope ralenti, accéléromètre gardé pour la détection de chute.
+    display.foreground = false;
+    expect(h.platform.gyroRates, [true, false]);
+    expect(h.platform.accRates, [true]);
+    // Les mesures ralenties alimentent toujours l'angle.
+    h.platform.gyro.add(SensorSample(h.platform.clock, 0, 0, 0));
+    await h.pump();
+
+    // Détection de chute coupée : l'accéléromètre ralentit aussi (au tic suivant).
+    await h.container.read(settingsProvider.notifier).update((s) => s.copyWith(crashDetection: false));
+    await h.ride(30, 2);
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    expect(h.platform.accRates.last, isFalse);
+
+    // Retour à l'écran de balade : pleine fréquence.
+    display.foreground = true;
+    expect(h.platform.gyroRates.last, isTrue);
+    expect(h.platform.accRates.last, isTrue);
+
+    // Écran de balade réduit (la balade continue) : ralenti ; une seule
+    // souscription par changement.
+    display.hudHidden();
+    expect(h.platform.gyroRates.last, isFalse);
+    final calls = h.platform.gyroRates.length;
+    display.foreground = false;
+    expect(h.platform.gyroRates.length, calls);
+
+    await h.ctrl.stop(save: false);
+    display.hudShown();
+    expect(h.platform.gyroRates.length, calls, reason: 'plus de balade : plus d\'abonnement');
     await h.dispose();
   });
 
