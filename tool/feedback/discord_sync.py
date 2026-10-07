@@ -130,6 +130,21 @@ def is_request_message(msg: dict | None, bot_user_id: str | None) -> bool:
     return bool((msg.get("content") or "").strip() or msg.get("embeds") or msg.get("attachments"))
 
 
+def looks_masked(msg: dict | None, bot_user_id: str | None) -> bool:
+    """Message vidé par Discord : sans l'option « Message Content Intent » du
+    bot, le texte, les embeds et les pièces jointes des messages des autres (y
+    compris ceux de l'appli, postés par le webhook) arrivent vides, et le pont
+    ne peut plus reconnaître les demandes."""
+    if not msg or msg.get("type", 0) not in (0, 19) or msg.get("pinned"):
+        return False
+    author = msg.get("author") or {}
+    if bot_user_id and str(author.get("id")) == str(bot_user_id):
+        return False
+    # Autocollant, transfert, sondage… : un message sans texte peut être normal.
+    keys = ("content", "embeds", "attachments", "sticker_items", "message_snapshots", "poll", "components")
+    return not any(msg.get(k) for k in keys)
+
+
 def is_app_post(msg: dict) -> bool:
     """Demande envoyée depuis l'appli : un embed avec le champ « Type »."""
     return any(f.get("name") == "Type" for e in msg.get("embeds") or [] for f in e.get("fields") or [])
@@ -413,6 +428,12 @@ def main() -> int:
         # n'en reçoit pas d'autre (fil supprimé par un modo, par exemple).
         bot_id = (discord.call("GET", "/users/@me") or {}).get("id")
         recent = discord.call("GET", f"/channels/{salon}/messages?limit=100") or []
+        masked = [m for m in recent if after_cutoff(m["id"], since) and looks_masked(m, bot_id)]
+        if masked:
+            # Sinon le pont ignorerait ces demandes sans rien dire.
+            errors += 1
+            print(f"::error::{len(masked)} message(s) du salon arrivent vides : active « Message Content Intent » "
+                  "(portail développeur Discord › ton appli › Bot › Privileged Gateway Intents › Save Changes).")
         for m in sorted(recent, key=lambda m: int(m["id"])):
             if m["id"] in by_thread or not after_cutoff(m["id"], since) or not needs_thread(m, bot_id):
                 continue

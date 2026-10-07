@@ -486,6 +486,30 @@ class TextChannelTest(unittest.TestCase):
         self.assertEqual(api.opened[-1][1], "Et un mode nuit ?")
         self.assertEqual(len(api.issues), 3)
 
+    def test_masked_content_fails_loudly(self):
+        # Sans « Message Content Intent », Discord vide les messages des autres :
+        # la demande de l'appli n'a plus sa fiche, le pont doit le signaler.
+        api = FakeTextApi()
+        api.channel = [dict(m, content="", embeds=[], attachments=[]) if m["id"] == "610" else m
+                       for m in api.channel]
+        printed = []
+        with mock.patch.dict(os.environ, self.ENV), mock.patch.object(ds, "Http", api.http), \
+                mock.patch("builtins.print", side_effect=lambda *a, **k: printed.append(" ".join(map(str, a)))):
+            self.assertEqual(ds.main(), 1)
+        self.assertTrue(any("Message Content Intent" in line for line in printed))
+        self.assertEqual([m for m, _ in api.opened], ["620"])
+
+    def test_looks_masked(self):
+        self.assertTrue(ds.looks_masked({"id": "1", "type": 0, "webhook_id": "1", "author": WEBHOOK, "content": "",
+                                         "embeds": [], "attachments": []}, "8"))
+        self.assertFalse(ds.looks_masked(APP_MESSAGE, "8"))
+        self.assertFalse(ds.looks_masked(MANUAL_MESSAGE, "8"))
+        self.assertFalse(ds.looks_masked({"id": "2", "type": 0, "author": {"id": "8"}, "content": ""}, "8"))
+        self.assertFalse(ds.looks_masked({"id": "3", "type": 0, "author": {"id": "4"}, "content": "",
+                                          "sticker_items": [{"id": "9"}]}, "8"))
+        self.assertFalse(ds.looks_masked({"id": "4", "type": 7, "author": {"id": "4"}, "content": ""}, "8"))
+        self.assertFalse(ds.looks_masked(None, "8"))
+
     def test_thread_on_pinned_message_is_not_a_ticket(self):
         api = FakeTextApi()
         # Quelqu'un a ouvert un fil à la main sous le « Comment ça marche » épinglé
