@@ -32,11 +32,12 @@ abstract class RidePlatform {
   /// arrière-plan autorisé sur iPhone).
   Stream<RiderPosition> positions();
 
-  /// Gyroscope ≈ 50 Hz (rad/s). Peut émettre une erreur si absent.
-  Stream<SensorSample> gyroscope();
+  /// Gyroscope (rad/s) : ≈ 50 Hz si [fast], ≈ 15 Hz sinon (moins de réveils du
+  /// processeur, assez pour suivre l'angle). Peut émettre une erreur si absent.
+  Stream<SensorSample> gyroscope({bool fast = true});
 
-  /// Accéléromètre ≈ 50 Hz (m/s², gravité incluse).
-  Stream<SensorSample> accelerometer();
+  /// Accéléromètre (m/s², gravité incluse) : ≈ 50 Hz si [fast], ≈ 15 Hz sinon.
+  Stream<SensorSample> accelerometer({bool fast = true});
 
   Future<void> requestNotificationPermission();
 
@@ -83,7 +84,8 @@ class DeviceRidePlatform implements RidePlatform {
   FlutterTts? _tts;
   Future<void>? _ttsReady;
 
-  static const _sensorPeriod = SensorInterval.gameInterval; // 20 ms ≈ 50 Hz
+  // 20 ms ≈ 50 Hz, ou 66 ms ≈ 15 Hz.
+  static Duration _sensorPeriod(bool fast) => fast ? SensorInterval.gameInterval : SensorInterval.uiInterval;
 
   @override
   DateTime now() => DateTime.now();
@@ -95,12 +97,14 @@ class DeviceRidePlatform implements RidePlatform {
   Stream<RiderPosition> positions() => _location.rideStream().map(RiderPosition.fromGeolocator);
 
   @override
-  Stream<SensorSample> gyroscope() =>
-      gyroscopeEventStream(samplingPeriod: _sensorPeriod).map((e) => SensorSample(e.timestamp, e.x, e.y, e.z));
+  Stream<SensorSample> gyroscope({bool fast = true}) => gyroscopeEventStream(
+    samplingPeriod: _sensorPeriod(fast),
+  ).map((e) => SensorSample(e.timestamp, e.x, e.y, e.z));
 
   @override
-  Stream<SensorSample> accelerometer() =>
-      accelerometerEventStream(samplingPeriod: _sensorPeriod).map((e) => SensorSample(e.timestamp, e.x, e.y, e.z));
+  Stream<SensorSample> accelerometer({bool fast = true}) => accelerometerEventStream(
+    samplingPeriod: _sensorPeriod(fast),
+  ).map((e) => SensorSample(e.timestamp, e.x, e.y, e.z));
 
   @override
   Future<void> requestNotificationPermission() async {

@@ -49,11 +49,12 @@ class LeanGauge extends StatelessWidget {
       child: SizedBox(
         width: size,
         height: size * (showValue ? 0.86 : 0.6),
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(end: target.toDouble()),
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          builder: (context, angle, _) {
+        // Pas d'animation entre deux valeurs : en balade l'angle change jusqu'à
+        // 10 fois par seconde, et une animation relancée à chaque fois ferait
+        // redessiner l'écran 60 fois par seconde en continu (batterie).
+        child: Builder(
+          builder: (context) {
+            final angle = target.toDouble();
             final color = CmColors.forLean(angle.abs());
             return Stack(
               clipBehavior: Clip.none,

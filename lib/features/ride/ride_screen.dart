@@ -24,6 +24,7 @@ import 'crash_alert_screen.dart';
 import 'dashboard/dashboard_body.dart';
 import 'dashboard/dashboard_editor.dart';
 import 'ride_controller.dart';
+import 'ride_display.dart';
 import 'ride_summary_screen.dart';
 import 'widgets/lean_gauge.dart';
 
@@ -57,6 +58,22 @@ class _RideScreenState extends ConsumerState<RideScreen> {
   static const _layoutKey = 'ride.hudLayout';
   HudLayout? _layout;
   bool _finishing = false;
+
+  /// L'écran de balade est affiché : capteurs à pleine fréquence (voir
+  /// RideController._applySensorRates).
+  late final RideDisplay _display = ref.read(rideDisplayProvider);
+
+  @override
+  void initState() {
+    super.initState();
+    _display.hudShown();
+  }
+
+  @override
+  void dispose() {
+    _display.hudHidden();
+    super.dispose();
+  }
 
   /// Vue à afficher pour la balade [rideId] (résolue une fois puis gardée).
   HudLayout _layoutFor(String? rideId) {
@@ -617,29 +634,18 @@ class _SheetAction extends StatelessWidget {
   }
 }
 
-class _RecPill extends StatefulWidget {
+/// Pastille REC / PAUSE et chrono. Le point clignote au rythme des secondes du
+/// chrono, déjà redessiné chaque seconde : pas d'animation qui tourne en continu
+/// (elle forcerait 60 images par seconde pendant toute la balade).
+class _RecPill extends StatelessWidget {
   const _RecPill({required this.paused, required this.elapsed});
 
   final bool paused;
   final Duration elapsed;
 
   @override
-  State<_RecPill> createState() => _RecPillState();
-}
-
-class _RecPillState extends State<_RecPill> with SingleTickerProviderStateMixin {
-  late final AnimationController _blink = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
-    ..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _blink.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final color = widget.paused ? CmColors.amber : CmColors.red;
+    final color = paused ? CmColors.amber : CmColors.red;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
@@ -650,11 +656,11 @@ class _RecPillState extends State<_RecPill> with SingleTickerProviderStateMixin 
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (widget.paused)
+          if (paused)
             Icon(Icons.pause_rounded, size: 16, color: color)
           else
-            FadeTransition(
-              opacity: Tween(begin: 0.25, end: 1.0).animate(_blink),
+            Opacity(
+              opacity: elapsed.inSeconds.isEven ? 1 : 0.25,
               child: Container(
                 width: 10,
                 height: 10,
@@ -663,11 +669,11 @@ class _RecPillState extends State<_RecPill> with SingleTickerProviderStateMixin 
             ),
           const SizedBox(width: 8),
           Text(
-            widget.paused ? 'PAUSE' : 'REC',
+            paused ? 'PAUSE' : 'REC',
             style: TextStyle(color: color, fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 13),
           ),
           const SizedBox(width: 8),
-          Text(Fmt.chrono(widget.elapsed), style: CmTheme.numbers(size: 20, color: Colors.white)),
+          Text(Fmt.chrono(elapsed), style: CmTheme.numbers(size: 20, color: Colors.white)),
         ],
       ),
     );

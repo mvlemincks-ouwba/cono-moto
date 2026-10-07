@@ -93,19 +93,17 @@ class _GForceGaugeState extends State<GForceGauge> {
               children: [
                 SizedBox.square(
                   dimension: size * 0.64,
-                  child: TweenAnimationBuilder<Offset>(
-                    tween: Tween(end: _point),
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, p, _) => CustomPaint(
-                      painter: GForcePainter(
-                        point: p,
-                        trail: List.of(_trail),
-                        maxAccelG: widget.maxAccelG,
-                        maxDecelG: widget.maxDecelG,
-                        dimmed: widget.dimmed,
-                        labelColor: muted,
-                      ),
+                  // Sans animation, comme la jauge d'angle : redessiné seulement
+                  // quand la valeur change (batterie). La traînée garde l'effet
+                  // de mouvement.
+                  child: CustomPaint(
+                    painter: GForcePainter(
+                      point: _point,
+                      trail: List.of(_trail),
+                      maxAccelG: widget.maxAccelG,
+                      maxDecelG: widget.maxDecelG,
+                      dimmed: widget.dimmed,
+                      labelColor: muted,
                     ),
                   ),
                 ),
