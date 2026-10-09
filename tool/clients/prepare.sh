@@ -20,6 +20,10 @@ if ! command -v flutter >/dev/null 2>&1; then
   fi
   export PATH=/opt/flutter-sdk/flutter/bin:$PATH
 fi
+# SDK installé par un autre utilisateur : git refuse d'y lire sans cette exception.
+sdk=$(dirname "$(dirname "$(command -v flutter)")")
+git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$sdk" \
+  || git config --global --add safe.directory "$sdk"
 flutter --version | head -1
 flutter pub get >/dev/null
 
