@@ -161,6 +161,10 @@ void main() {
       expect(r.durationS, 600);
       expect(r.elevationGainM, 400);
       expect(r.waypoints.length, greaterThanOrEqualTo(2));
+      // Points de passage serrés (≤ 2 km) : le recalcul colle à la route suivie.
+      for (var i = 1; i < r.waypoints.length; i++) {
+        expect(Geo.distance(r.waypoints[i - 1], r.waypoints[i]), lessThanOrEqualTo(2001));
+      }
       expect(r.description, contains('Balade enregistrée le'));
       // Aller-retour JSON (stockage) sans perte.
       final back = PlannedRoute.fromJson(r.toJson());
