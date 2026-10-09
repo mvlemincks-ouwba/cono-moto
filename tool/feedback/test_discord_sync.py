@@ -143,7 +143,10 @@ WEBHOOK = {"id": "1", "username": "Cono Moto", "bot": True}
 APP_MESSAGE = {"id": "610", "type": 0, "webhook_id": "1", "author": WEBHOOK, "content": "",
                "embeds": APP_STARTER["embeds"], "reactions": [{"emoji": {"name": "👍"}, "count": 3}]}
 MANUAL_MESSAGE = {"id": "620", "type": 0, "author": {"id": "4", "username": "seb_moto", "global_name": "Seb"},
-                  "content": "**Mode pluie** pour la carte <@123>\nAvec des couleurs plus contrastées."}
+                  "content": "💡 **Mode pluie** pour la carte <@123>\nAvec des couleurs plus contrastées."}
+# Discussion entre potes dans le salon : jamais un ticket.
+CHAT_MESSAGE = {"id": "625", "type": 0, "author": {"id": "5", "username": "julien"},
+                "content": "Quelqu'un roule ce week-end ? Bug de météo sinon :)"}
 PINNED_MESSAGE = {"id": "600", "type": 0, "pinned": True, "webhook_id": "1", "author": WEBHOOK, "content": "",
                   "embeds": [{"title": "📌 Comment ça marche", "description": "Une demande = un message."}]}
 BOT_MESSAGE = {"id": "630", "type": 0, "author": {"id": "8", "username": "ConoBot", "bot": True},
@@ -173,9 +176,14 @@ class TextChannelLogicTest(unittest.TestCase):
         self.assertTrue(ds.is_request_message(APP_MESSAGE, "8"))  # webhook de l'appli : une demande
         self.assertTrue(ds.is_request_message(MANUAL_MESSAGE, "8"))
         self.assertTrue(ds.is_request_message(dict(MANUAL_MESSAGE, type=19), "8"))  # réponse à un message
-        self.assertTrue(ds.is_request_message(
-            {"id": "1", "author": {"id": "4"}, "content": "", "attachments": [{"url": "https://cdn/x.png"}]}, "8"))
         self.assertTrue(ds.is_request_message(MANUAL_MESSAGE, None))
+        self.assertTrue(ds.is_request_message(dict(MANUAL_MESSAGE, content="🐞 La carte se fige"), "8"))
+        self.assertTrue(ds.is_request_message(dict(MANUAL_MESSAGE, content="Bug : la carte se fige"), "8"))
+        # La discussion du salon n'est pas une demande, réponse ou non, même avec une image.
+        self.assertFalse(ds.is_request_message(CHAT_MESSAGE, "8"))
+        self.assertFalse(ds.is_request_message(dict(CHAT_MESSAGE, type=19), "8"))
+        self.assertFalse(ds.is_request_message(
+            {"id": "1", "author": {"id": "4"}, "content": "", "attachments": [{"url": "https://cdn/x.png"}]}, "8"))
         self.assertFalse(ds.is_request_message(PINNED_MESSAGE, "8"))
         # Annonce postée par le webhook sans la fiche de l'appli : pas une demande.
         announce = {"id": "640", "type": 0, "webhook_id": "1", "author": WEBHOOK, "content": "Salut ! Tes idées sont faites."}
@@ -190,6 +198,14 @@ class TextChannelLogicTest(unittest.TestCase):
         self.assertFalse(ds.is_request_message(dict(MANUAL_MESSAGE, content="  "), "8"))
         self.assertFalse(ds.is_request_message(None, "8"))
 
+    def test_is_explicit_request(self):
+        for text in ("💡 Mode pluie", "  🐞 La carte se fige", "Idée : mode pluie", "idee: mode pluie",
+                     "BUG : ça plante", "Idée\u00a0: mode pluie", "💡**Mode pluie**"):
+            self.assertTrue(ds.is_explicit_request(text), text)
+        for text in ("Grave, +1", "Une idée pour samedi ?", "Bug de météo sinon :)", "Mode pluie 💡",
+                     "Bugs : aucun", "", None):
+            self.assertFalse(ds.is_explicit_request(text), text)
+
     def test_needs_thread(self):
         self.assertTrue(ds.needs_thread(APP_MESSAGE, "8"))
         self.assertFalse(ds.needs_thread(dict(APP_MESSAGE, thread={"id": "610"}), "8"))
@@ -200,7 +216,7 @@ class TextChannelLogicTest(unittest.TestCase):
         self.assertEqual(ds.thread_title(APP_MESSAGE), "Radars sur la carte")
         bug = {"content": "", "embeds": [{"title": "🐞 Bug : La carte se fige", "description": "Plus rien."}]}
         self.assertEqual(ds.thread_title(bug), "La carte se fige")
-        self.assertEqual(ds.thread_title(MANUAL_MESSAGE), "Mode pluie pour la carte")
+        self.assertEqual(ds.thread_title(MANUAL_MESSAGE), "💡 Mode pluie pour la carte")
         # Message écrit à la main avec un aperçu de lien : c'est le texte qui compte
         link = {"content": "\n> Regardez ça <:moto:42> https://exemple.fr", "embeds": [{"title": "Exemple"}]}
         self.assertEqual(ds.thread_title(link), "Regardez ça :moto: https://exemple.fr")
@@ -381,7 +397,7 @@ class FakeTextApi(FakeApi):
     def __init__(self):
         super().__init__()
         system = {"id": "601", "type": 6, "author": {"id": "3", "username": "marc"}, "content": ""}
-        self.channel = [PINNED_MESSAGE, system, APP_MESSAGE, MANUAL_MESSAGE, BOT_MESSAGE]
+        self.channel = [PINNED_MESSAGE, system, APP_MESSAGE, MANUAL_MESSAGE, CHAT_MESSAGE, BOT_MESSAGE]
         self.threads = {"5000": {"id": "5000", "name": "Fil d'un autre salon", "parent_id": "99"}}
         self.messages = {}  # messages des fils
         self.opened: list[tuple[str, str]] = []
@@ -446,13 +462,13 @@ class TextChannelTest(unittest.TestCase):
 
     def test_text_channel(self):
         api = FakeTextApi()
-        # 1. Un fil sous la demande de l'appli et sous celle de Seb, rien d'autre
+        # 1. Un fil sous la demande de l'appli et sous le 💡 de Seb, rien d'autre
         self.assertEqual(self.run_sync(api), 0)
-        self.assertEqual(api.opened, [("610", "Radars sur la carte"), ("620", "Mode pluie pour la carte")])
+        self.assertEqual(api.opened, [("610", "Radars sur la carte"), ("620", "💡 Mode pluie pour la carte")])
         self.assertEqual([i["title"] for i in api.issues],
-                         ["[Idée] Radars sur la carte", "[Retour] Mode pluie pour la carte"])
+                         ["[Idée] Radars sur la carte", "[Idée] Mode pluie pour la carte"])
         self.assertEqual(api.issues[0]["labels"], ["feedback", "idée"])
-        self.assertEqual(api.issues[1]["labels"], ["feedback"])
+        self.assertEqual(api.issues[1]["labels"], ["feedback", "idée"])
         body = api.issues[0]["body"]
         self.assertIn("Afficher les radars fixes", body)
         self.assertIn("**De :** Julien", body)
@@ -461,10 +477,11 @@ class TextChannelTest(unittest.TestCase):
         self.assertEqual(ds.thread_id_of(api.issues[1]), "620")
         self.assertIn("**De :** Seb", api.issues[1]["body"])
         self.assertIn("Avec des couleurs plus contrastées.", api.issues[1]["body"])
-        # « Bien reçu » dans chaque fil (jamais dans le salon), épinglé et bot ignorés
+        # « Bien reçu » dans chaque fil (jamais dans le salon), épinglé, discussion et bot ignorés
         self.assertEqual([tid for tid, _ in api.discord_posts], ["610", "620"])
         self.assertTrue(all("Bien reçu" in p for _, p in api.discord_posts))
         self.assertNotIn("600", api.threads)
+        self.assertNotIn("625", api.threads)
         self.assertNotIn("630", api.threads)
 
         # 2. Deuxième passage : rien n'est recréé
@@ -482,9 +499,17 @@ class TextChannelTest(unittest.TestCase):
         self.assertEqual(len(copied), 1)
         self.assertIn("> Grave, +1", copied[0])
         self.assertEqual(api.comments[1], [])
-        # … et un nouveau message du salon est une nouvelle demande
-        self.assertEqual(api.opened[-1][1], "Et un mode nuit ?")
-        self.assertEqual(len(api.issues), 3)
+        # … la discussion du salon reste de la discussion …
+        self.assertEqual(len(api.opened), 2)
+        self.assertEqual(len(api.issues), 2)
+
+        # 4. … et un message qui commence par 🐞 est une nouvelle demande
+        api.channel.append({"id": api.new_id(), "type": 0, "author": {"id": "4", "username": "seb_moto"},
+                            "content": "🐞 La carte se fige au démarrage"})
+        self.assertEqual(self.run_sync(api), 0)
+        self.assertEqual(api.opened[-1][1], "🐞 La carte se fige au démarrage")
+        self.assertEqual(api.issues[-1]["title"], "[Bug] La carte se fige au démarrage")
+        self.assertEqual(api.issues[-1]["labels"], ["feedback", "bug"])
 
     def test_masked_content_fails_loudly(self):
         # Sans « Message Content Intent », Discord vide les messages des autres :

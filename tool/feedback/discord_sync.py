@@ -104,16 +104,27 @@ def channel_id_from(env) -> str:
 
 
 def is_text_channel(channel: dict) -> bool:
-    """Salon texte (ou d'annonces) : une demande = un message, le bot ouvre le fil.
-    Sinon (forum) : chaque post est déjà un fil."""
+    """Salon texte (ou d'annonces) : le bot ouvre un fil sous chaque demande (fiche
+    de l'appli, ou message qui commence par 💡 / 🐞). Sinon (forum) : chaque post
+    est déjà un fil."""
     return channel.get("type") in TEXT_CHANNEL_TYPES
 
 
+# Salon texte : une demande écrite à la main commence par 💡 ou 🐞 (ou
+# « Idée : », « Bug : ») ; le reste est de la discussion entre potes.
+EXPLICIT_REQUEST_RE = re.compile(r"^\s*(?:💡|🐞|(?:idée|idee|bug)\s*:)", re.I)
+
+
+def is_explicit_request(content: str | None) -> bool:
+    return bool(EXPLICIT_REQUEST_RE.match(content or ""))
+
+
 def is_request_message(msg: dict | None, bot_user_id: str | None) -> bool:
-    """Un message d'un salon texte est-il une demande ? Ni épinglé (le « Comment
-    ça marche »), ni de notre bot (« Bien reçu »…), ni système, ni vide. Les
-    messages de l'appli passent par le webhook (bot + webhook_id) : ce sont des
-    demandes."""
+    """Un message d'un salon texte est-il une demande ? Oui pour la fiche envoyée
+    depuis l'appli (webhook avec le champ « Type ») et pour un message écrit à
+    la main qui commence par 💡 / 🐞 (ou « Idée : » / « Bug : »). Jamais pour
+    la discussion, les messages épinglés (le « Comment ça marche »), ceux de
+    notre bot (« Bien reçu »…) ni les messages système."""
     if not msg or msg.get("pinned"):
         return False
     author = msg.get("author") or {}
@@ -127,7 +138,9 @@ def is_request_message(msg: dict | None, bot_user_id: str | None) -> bool:
         return False
     if msg.get("type", 0) not in (0, 19):
         return False
-    return bool((msg.get("content") or "").strip() or msg.get("embeds") or msg.get("attachments"))
+    if msg.get("webhook_id"):
+        return True  # fiche de l'appli (vérifiée plus haut)
+    return is_explicit_request(msg.get("content"))
 
 
 def looks_masked(msg: dict | None, bot_user_id: str | None) -> bool:

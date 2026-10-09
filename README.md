@@ -207,8 +207,9 @@ Détails dans [`firebase/README.md`](firebase/README.md).
 Dans l'app (**Réglages › Communauté**, ou menu ⋮ de l'onglet Potes), chacun peut proposer une idée ou
 signaler un bug, avec une capture d'écran. Ça part dans un **salon Discord** (salon texte ou forum) :
 une demande = un fil, les potes en discutent et votent 👍. On peut aussi écrire directement dans le salon.
-Dans un **salon texte**, chaque message est une demande et le bot ouvre un fil dessous : pour en discuter,
-réponds dans le fil, pas dans le salon. Dans un **forum**, chaque post est déjà un fil.
+Dans un **salon texte**, on peut discuter librement : seules les fiches envoyées depuis l'app et les messages
+qui commencent par **💡** (idée) ou **🐞** (bug), ou par « Idée : » / « Bug : », deviennent des demandes. Le bot
+ouvre alors un fil dessous : pour en discuter, réponds dans le fil. Dans un **forum**, chaque post est déjà un fil.
 
 **a) Le salon et le webhook (pour l'app)**
 1. Sur ton serveur Discord, crée un salon, par ex. `💡-idées` : un **salon texte** classique, ou un **Forum**
@@ -216,8 +217,9 @@ réponds dans le fil, pas dans le salon. Dans un **forum**, chaque post est déj
 2. Paramètres du salon › **Intégrations › Webhooks › Nouveau webhook** › nomme-le « Cono Moto » › **Copier l'URL**.
 3. Secret GitHub **`DISCORD_FEEDBACK_WEBHOOK`** = cette URL.
 4. (Facultatif) Un lien d'invitation permanent au serveur → secret **`DISCORD_INVITE_URL`** (bouton « Rejoindre le Discord »).
-5. Salon texte : poste un message « 📌 Comment ça marche » (le principe en deux lignes) et **épingle-le**
-   (clic droit › Épingler). Le bot ignore les messages épinglés : celui-là ne deviendra jamais une demande.
+5. Salon texte : poste un message « 📌 Comment ça marche » et **épingle-le** (clic droit › Épingler), par ex. :
+   « Une idée ou un bug ? Envoie-le depuis l'appli (Réglages › Communauté), ou écris ici un message qui commence
+   par 💡 ou 🐞. Le reste, c'est de la discussion : le bot n'y touche pas. »
 
 > L'URL du webhook est intégrée à l'app : quelqu'un qui décortique l'APK pourrait poster dans ce salon.
 > En cas d'abus, supprime le webhook, crée-en un autre et mets à jour le secret.
