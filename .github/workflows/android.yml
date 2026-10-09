@@ -188,6 +188,19 @@ jobs:
           tag_name: derniere-version
           files: build/release/android.json
 
+      # La version est en ligne : message dans le salon Discord de la bande, avec
+      # le « quoi de neuf ». Les potes de DISCORD_ANNOUNCE_USERS (variable du
+      # dépôt, identifiants Discord ; Do(w)n Jones par défaut) sont notifiés.
+      - name: Annonce sur Discord
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          DISCORD_FEEDBACK_WEBHOOK: ${{ secrets.DISCORD_FEEDBACK_WEBHOOK }}
+          DISCORD_ANNOUNCE_USERS: ${{ vars.DISCORD_ANNOUNCE_USERS || '372312536428838912' }}
+        run: >-
+          python3 tool/release/announce_discord.py build/release/android.json
+          "https://github.com/${{ github.repository }}/releases/tag/derniere-version"
+
       - name: Release taguée
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3

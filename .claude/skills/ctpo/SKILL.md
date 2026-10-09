@@ -168,8 +168,10 @@ fusionnera (étape 2.2).
    laisse la pull request ouverte et explique à Marc.
 7. Verte et hors zone `à-valider` → fusionne (`merge_pull_request`, méthode
    `merge`, `expectedHeadSha`). Les tickets se ferment ; Discord annonce
-   « C'est fait » aux potes ; la version part toute seule. Vérifie ensuite que
-   le run « APK Android » de `main` passe ; s'il casse, corrige-le en priorité.
+   « C'est fait » aux potes ; la version part toute seule, et le build Android
+   l'annonce dans le salon Discord avec le « quoi de neuf » en prévenant
+   Do(w)n Jones (n'envoie pas d'autre annonce). Vérifie ensuite que le run
+   « APK Android » de `main` passe ; s'il casse, corrige-le en priorité.
 8. Pull request `à-valider` : pour un ticket de pote, réponds-lui « c'est en
    préparation, ce sera dans une prochaine version ».
 
