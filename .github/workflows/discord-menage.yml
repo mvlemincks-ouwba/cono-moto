@@ -1,0 +1,80 @@
+name: Ménage Discord (ponctuel)
+
+# Ponctuel : efface les « 📌 Bien reçu » que le bot a postés dans les fils
+# ouverts par erreur sous la discussion du salon (tickets #22 à #34, fermés
+# comme « non prévu »). Un fil où il ne reste plus rien est supprimé si le bot
+# en a le droit (« Gérer les fils »), sinon fermé. Les messages des potes ne
+# sont jamais touchés.
+on:
+  push:
+    branches: [claude/discord-menage]
+
+concurrency:
+  group: feedback-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  menage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Ménage
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TICKETS: "22 23 24 25 26 27 28 29 30 31 32 33 34"
+        run: |
+          python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, "tool/feedback")
+          import discord_sync as ds
+
+          token = os.environ["DISCORD_BOT_TOKEN"].strip()
+          repo = os.environ["GITHUB_REPOSITORY"]
+          discord = ds.Http(ds.DISCORD_API, {"Authorization": f"Bot {token}", "User-Agent": ds.USER_AGENT})
+          github = ds.Http(ds.GITHUB_API, {"Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+                                           "Accept": "application/vnd.github+json", "User-Agent": ds.USER_AGENT})
+          bot_id = discord.call("GET", "/users/@me")["id"]
+          deleted = removed = closed = 0
+          for number in os.environ["TICKETS"].split():
+              issue = github.call("GET", f"/repos/{repo}/issues/{number}")
+              labels = {l["name"] for l in issue.get("labels", [])}
+              tid = ds.thread_id_of(issue)
+              # Garde-fou : uniquement les tickets de discussion fermés « non prévu ».
+              if issue["state"] != "closed" or issue.get("state_reason") != "not_planned" \
+                      or "feedback" not in labels or not tid:
+                  print(f"::warning::#{number} ignoré (pas un ticket de discussion fermé)")
+                  continue
+              try:
+                  messages = discord.call("GET", f"/channels/{tid}/messages?limit=100") or []
+              except RuntimeError as e:
+                  print(f"#{number} : fil {tid} introuvable ({e})")
+                  continue
+              mine = [m for m in messages if str((m.get("author") or {}).get("id")) == bot_id]
+              for m in mine:
+                  discord.call("DELETE", f"/channels/{tid}/messages/{m['id']}")
+                  deleted += 1
+              others = [m for m in messages if m not in mine and m.get("type", 0) in (0, 19)]
+              if others:
+                  print(f"#{number} : {len(mine)} message(s) du bot effacé(s), fil gardé "
+                        f"({len(others)} message(s) des potes dedans)")
+                  continue
+              try:
+                  discord.call("DELETE", f"/channels/{tid}")
+                  removed += 1
+                  print(f"#{number} : {len(mine)} message(s) du bot effacé(s), fil vide supprimé")
+              except RuntimeError:
+                  try:
+                      discord.call("PATCH", f"/channels/{tid}", {"archived": True})
+                      closed += 1
+                      print(f"#{number} : {len(mine)} message(s) du bot effacé(s), fil vide fermé")
+                  except RuntimeError as e:
+                      print(f"#{number} : {len(mine)} message(s) du bot effacé(s), fil laissé tel quel ({e})")
+          print(f"Bilan : {deleted} message(s) effacé(s), {removed} fil(s) supprimé(s), {closed} fil(s) fermé(s).")
+          PY
