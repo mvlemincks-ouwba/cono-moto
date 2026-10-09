@@ -284,6 +284,9 @@ release [**« derniere-version »**](https://github.com/mvlemincks-ouwba/cono-mo
 de ce dépôt les APK, l'IPA, `android.json` / `ios.json` (version + quoi de neuf, lus par l'app), la source SideStore
 `sidestore.json` et, en texte de la page, le mode d'emploi pour les potes
 (tiré de [`docs/releases/README.md`](docs/releases/README.md)).
+Le build Android annonce ensuite la version dans le salon Discord de la bande (webhook de la boîte à idées), avec
+le « quoi de neuf », en mentionnant les potes de la variable du dépôt `DISCORD_ANNOUNCE_USERS` (identifiants
+Discord séparés par des virgules ; Do(w)n Jones par défaut). Eux seuls reçoivent une notification.
 
 ⚠️ Le dépôt doit rester **public** : l'app télécharge ses mises à jour sans compte GitHub. S'il redevenait privé,
 les mises à jour automatiques s'arrêteraient.
