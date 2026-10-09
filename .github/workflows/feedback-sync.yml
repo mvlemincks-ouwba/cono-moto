@@ -1,7 +1,8 @@
 name: Boîte à idées (Discord ↔ GitHub)
 
 # Toutes les heures : les nouvelles demandes du salon Discord (salon texte : le
-# bot ouvre un fil sous chaque message ; forum : un post = un fil) deviennent des
+# bot ouvre un fil sous chaque fiche de l'appli ou message commençant par 💡 / 🐞 ;
+# forum : un post = un fil) deviennent des
 # tickets GitHub (étiquette « feedback »), les réponses marquées
 # <!-- pour-discord --> sont repostées dans Discord, et la fermeture d'un ticket
 # est annoncée.
