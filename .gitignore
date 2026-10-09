@@ -49,3 +49,6 @@ app.*.map.json
 # Captures générées par tool/screenshots (polices à fournir via --dart-define=FONTS_DIR=...)
 tool/screenshots/out/
 build-config.json
+
+# Tests jetables du panel de clients IA (jamais commités)
+test/_panel/

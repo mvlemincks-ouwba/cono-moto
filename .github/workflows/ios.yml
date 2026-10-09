@@ -24,6 +24,10 @@ on:
       - "web_share/**"
       - "firebase/**"
       - "android/**"
+      - ".claude/**"
+      - "tool/clients/**"
+      - "tool/feedback/**"
+      - ".github/workflows/feedback-sync.yml"
 
 concurrency:
   group: ios-${{ github.ref }}

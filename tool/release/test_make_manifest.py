@@ -30,6 +30,9 @@ class NotesTest(unittest.TestCase):
         self.assertEqual(mm.release_notes(subjects), ["Mises à jour automatiques", "Boîte à idées"])
         self.assertEqual(len(mm.release_notes([f"Changement {i}" for i in range(20)])), mm.MAX_NOTES)
         self.assertEqual(mm.release_notes(["Merge x"]), [mm.FALLBACK_NOTE])
+        # Changements techniques (agents, pont Discord…) : masqués
+        self.assertEqual(mm.release_notes(["Interne : panel de clients IA", "interne: CI", "Compteur plus lisible"]),
+                         ["Compteur plus lisible"])
 
 
 class SourceTest(unittest.TestCase):

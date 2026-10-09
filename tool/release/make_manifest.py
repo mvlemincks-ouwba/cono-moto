@@ -46,6 +46,8 @@ def clean_subject(subject: str) -> str | None:
     s = subject.strip()
     if not s or s.startswith(("Merge ", "Revert \"Merge")) or "[skip ci]" in s:
         return None
+    if re.match(r"interne\s*:", s, re.I):
+        return None  # changement technique, sans intérêt pour les potes
     s = re.sub(r"\s*\(#\d+\)\s*$", "", s)
     return s or None
 

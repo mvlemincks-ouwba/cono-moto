@@ -4,6 +4,13 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
+    # Outils internes (pont Discord, panel de clients IA, CTPO) : ni build ni
+    # nouvelle version. Les pull requests, elles, sont toujours vérifiées.
+    paths-ignore:
+      - ".claude/**"
+      - "tool/clients/**"
+      - "tool/feedback/**"
+      - ".github/workflows/feedback-sync.yml"
   pull_request:
   workflow_dispatch:
 
