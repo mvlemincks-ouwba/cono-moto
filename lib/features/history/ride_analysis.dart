@@ -224,11 +224,14 @@ RouteStyle guessRouteStyle(RideStats s) {
 
 /// Balade planifiée (source « enregistrée ») à partir d'une balade de l'historique.
 /// La trace est simplifiée (~10 m) ; à défaut, l'aperçu enregistré est utilisé.
+/// Les points de passage sont serrés (tous les 2 km, 80 au plus) : le recalcul
+/// « suivre les routes » qui ajoute les consignes de virage colle ainsi à la
+/// route réellement suivie.
 PlannedRoute plannedRouteFromRide(Ride ride, List<TrackPoint> track, {required String id, required DateTime now}) {
   final raw = track.isNotEmpty ? [for (final p in track) p.point] : ride.previewPoints;
   final points = raw.length > 2 ? Geo.simplify(raw, 10) : List.of(raw);
   final length = points.length >= 2 ? Geo.length(points) : ride.stats.distanceM;
-  final waypoints = points.length >= 2 ? Geo.resample(points, math.max(5000, length / 12)) : points;
+  final waypoints = points.length >= 2 ? Geo.resample(points, math.max(2000, length / 80)) : points;
   final s = ride.stats;
   final curvesPer100 = s.distanceKm > 0 ? s.curveCount / s.distanceKm * 100 : 0.0;
   return PlannedRoute(

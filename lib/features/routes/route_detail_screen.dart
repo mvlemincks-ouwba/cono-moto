@@ -237,7 +237,7 @@ class _RouteDetailScreenState extends ConsumerState<RouteDetailScreen> {
                     value: _MenuAction.exportGpx,
                     child: ListTile(leading: Icon(Icons.ios_share), title: Text('Exporter en GPX')),
                   ),
-                  if (sparse)
+                  if (canFollowRoads(r))
                     const PopupMenuItem(
                       value: _MenuAction.reroute,
                       child: ListTile(leading: Icon(Icons.alt_route), title: Text('Suivre les routes')),

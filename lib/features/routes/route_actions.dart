@@ -166,3 +166,8 @@ bool isSparseRoute(PlannedRoute r) {
   final spacing = r.distanceM / (r.points.length - 1);
   return r.source == RouteSource.gpx && spacing > sparseSpacingM;
 }
+
+/// Vrai si « Suivre les routes » a un sens : GPX épars, ou balade refaite
+/// restée sans consignes de virage (recalcul impossible hors réseau).
+bool canFollowRoads(PlannedRoute r) =>
+    isSparseRoute(r) || (r.source == RouteSource.recorded && r.maneuvers.isEmpty && r.points.length >= 2);

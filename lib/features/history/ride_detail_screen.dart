@@ -17,10 +17,12 @@ import '../../data/models/ride.dart';
 import '../../services/routing/gpx.dart';
 import '../fuel/fuel_ui.dart';
 import '../garage/expense_form.dart';
+import '../routes/route_actions.dart';
 import '../routes/route_detail_screen.dart';
 import '../social/social_sheets.dart';
 import 'history_providers.dart';
 import 'ride_analysis.dart';
+import 'ride_replay.dart';
 import 'ride_share_card.dart';
 import 'widgets/chart_kit.dart';
 import 'widgets/ride_card.dart' show capitalizeFirst;
@@ -198,21 +200,30 @@ class _RideDetailScreenState extends ConsumerState<RideDetailScreen> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final routes = ref.read(routeRepositoryProvider);
-      // Une seule balade planifiée par balade enregistrée (pas de doublons).
-      final id = 'replay-${ride.id}';
-      var route = await routes.get(id);
-      if (route == null) {
-        final track = await ref.read(rideRepositoryProvider).points(ride.id);
-        route = plannedRouteFromRide(ride, track, id: id, now: DateTime.now());
-        if (route.points.length < 2) {
-          if (mounted) showCmSnack(context, 'Pas de trace exploitable pour refaire cette balade.', error: true);
-          return;
-        }
-        await routes.upsert(route);
-      }
+      final plan = await prepareReplay(
+        ride: ride,
+        routes: ref.read(routeRepositoryProvider),
+        track: () => ref.read(rideRepositoryProvider).points(ride.id),
+        reroute: (r) => rerouteAlongRoads(ref, r),
+        now: DateTime.now(),
+        onRerouting: () {
+          if (mounted) showCmSnack(context, 'Préparation des consignes de virage…');
+        },
+      );
       if (!mounted) return;
-      await Navigator.of(context).push(RouteDetailScreen.pageRoute(route));
+      if (plan == null) {
+        showCmSnack(context, 'Pas de trace exploitable pour refaire cette balade.', error: true);
+        return;
+      }
+      final error = plan.offlineError;
+      if (error != null) {
+        showCmSnack(
+          context,
+          '${error.message} Balade gardée sans consignes de virage : réessaie plus tard avec ⋮ › Suivre les routes.',
+          error: true,
+        );
+      }
+      await Navigator.of(context).push(RouteDetailScreen.pageRoute(plan.route));
     } catch (e) {
       if (mounted) showCmSnack(context, 'Impossible de préparer la balade : $e', error: true);
     } finally {
