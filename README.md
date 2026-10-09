@@ -252,10 +252,21 @@ Les messages postés par le webhook sans la fiche de l'appli (mode d'emploi, ré
 jamais des demandes, et dans un salon texte les messages antérieurs à `DISCORD_SINCE_ID` (variable du dépôt,
 réglée dans le workflow sur la mise en route du bot) sont ignorés.
 
-**c) Le traitement** : chaque matin, une routine Claude Code lit les nouveaux tickets `feedback` (et les réponses
-aux questions qu'elle a posées), répond aux potes (sa réponse est repostée dans le fil Discord), trie avec les
-étiquettes `accepté` / `à-préciser` / `à-discuter` / `pas-prévu`, et prépare une pull request pour ce qui est
-simple et clair. Tu n'as plus qu'à fusionner : le ticket se ferme et le fil Discord annonce « C'est fait ».
+**c) Le traitement : panel de clients IA + CTPO**, deux routines Claude Code quotidiennes.
+
+- **Panel de clients IA** (tôt le matin, [`.claude/skills/clients-ia`](.claude/skills/clients-ia/SKILL.md)) :
+  deux des six [personas](.claude/skills/clients-ia/personas.md) (jeune permis, voyageur, pistard, retraité du club,
+  organisatrice, petit budget) jouent une mission dans l'appli : captures d'écran générées, tests jetables, lecture
+  du code. Ils publient au plus 3 tickets `client-ia` par jour, avec preuve. Jamais sur Discord.
+- **CTPO** (après, [`.claude/skills/ctpo`](.claude/skills/ctpo/SKILL.md)) : trie les tickets `feedback` des potes
+  (réponse repostée dans le fil Discord) et `client-ia`, tient la [feuille de route](https://github.com/mvlemincks-ouwba/cono-moto/issues?q=label%3Aroadmap)
+  (ticket « 🧭 Feuille de route »), puis livre au plus une mise à jour par jour : pull request, CI verte, fusion,
+  publication automatique. Le ticket se ferme et le fil Discord annonce « C'est fait ».
+  Il ne fusionne pas lui-même ce qui touche à la sécurité des personnes (détection de chute, alertes, partage de
+  position), aux données, aux mises à jour automatiques, au natif ou aux dépendances : pull request étiquetée
+  `à-valider`, à toi de relire. Pas de fusion le week-end (les potes roulent), sauf bug bloquant.
+- Un titre de pull request qui commence par « Interne : » n'apparaît pas dans le « quoi de neuf » de l'appli, et un
+  changement qui ne touche que ces outils (`.claude/`, `tool/clients/`, `tool/feedback/`) ne publie pas de version.
 
 ### 5. Mises à jour automatiques — gratuit
 
