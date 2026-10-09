@@ -1,10 +1,9 @@
-<@372312536428838912> Suite à ton retour sur la batterie 🔋 une nouvelle version est dispo, avec deux changements :
+<@372312536428838912> 🏍️ **Nouvelle version de Cono Moto** (v1.0.0, build 94) !
 
-• **L'écran travaille beaucoup moins en balade** : deux petites animations (le point « REC » qui clignote et l'aiguille des jauges) obligeaient l'écran à se redessiner 60 fois par seconde pendant toute la balade. C'est fini : il ne se met à jour que quand une valeur change.
-• **Les capteurs ralentissent quand tu ne regardes pas** : écran éteint ou appli en arrière-plan, le capteur d'inclinaison mesure 3 fois moins souvent. Ton angle reste enregistré avec la même précision pour l'historique.
+**Quoi de neuf**
+• Refaire une balade : flèches et voix à chaque virage
+• Pont Discord : seuls les messages 💡 / 🐞 deviennent des tickets
+• Pont Discord : alerte quand Discord masque le contenu des messages
 
-Aucune fonction en moins 👌
-
-Pour l'avoir : ouvre l'appli, elle te propose la mise à jour au démarrage (sinon Réglages › Mises à jour).
-
-Si tu peux, refais une balade de 30 min comme la dernière et dis-nous combien de % elle a pris : ça nous dira s'il faut aller plus loin (mode économie, écran qui s'éteint en mode GPS…) 🙏
+📲 Ouvre l'appli : elle te propose la mise à jour (Android : un appui ; iPhone : via SideStore).
+<https://github.com/mvlemincks-ouwba/cono-moto/releases/tag/derniere-version>
