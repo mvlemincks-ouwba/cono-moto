@@ -58,8 +58,10 @@ jobs:
                   print(f"#{number} : fil {tid} introuvable ({e})")
                   continue
               try:
-                  mine = [m for m in messages if str((m.get("author") or {}).get("id")) == bot_id]
-                  others = [m for m in messages if m not in mine and m.get("type", 0) in (0, 19)]
+                  # Messages système (« a créé le fil »…) : ni supprimables, ni comptés.
+                  written = [m for m in messages if m.get("type", 0) in (0, 19)]
+                  mine = [m for m in written if str((m.get("author") or {}).get("id")) == bot_id]
+                  others = [m for m in written if m not in mine]
                   # Un fil fermé n'accepte aucune suppression : on le rouvre le temps du ménage.
                   if mine and (thread.get("thread_metadata") or {}).get("archived"):
                       discord.call("PATCH", f"/channels/{tid}", {"archived": False})
