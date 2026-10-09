@@ -41,7 +41,7 @@ jobs:
           github = ds.Http(ds.GITHUB_API, {"Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
                                            "Accept": "application/vnd.github+json", "User-Agent": ds.USER_AGENT})
           bot_id = discord.call("GET", "/users/@me")["id"]
-          deleted = removed = closed = 0
+          deleted = removed = closed = errors = 0
           for number in os.environ["TICKETS"].split():
               issue = github.call("GET", f"/repos/{repo}/issues/{number}")
               labels = {l["name"] for l in issue.get("labels", [])}
@@ -52,29 +52,38 @@ jobs:
                   print(f"::warning::#{number} ignoré (pas un ticket de discussion fermé)")
                   continue
               try:
+                  thread = discord.call("GET", f"/channels/{tid}")
                   messages = discord.call("GET", f"/channels/{tid}/messages?limit=100") or []
               except RuntimeError as e:
                   print(f"#{number} : fil {tid} introuvable ({e})")
                   continue
-              mine = [m for m in messages if str((m.get("author") or {}).get("id")) == bot_id]
-              for m in mine:
-                  discord.call("DELETE", f"/channels/{tid}/messages/{m['id']}")
-                  deleted += 1
-              others = [m for m in messages if m not in mine and m.get("type", 0) in (0, 19)]
-              if others:
-                  print(f"#{number} : {len(mine)} message(s) du bot effacé(s), fil gardé "
-                        f"({len(others)} message(s) des potes dedans)")
-                  continue
               try:
-                  discord.call("DELETE", f"/channels/{tid}")
-                  removed += 1
-                  print(f"#{number} : {len(mine)} message(s) du bot effacé(s), fil vide supprimé")
-              except RuntimeError:
+                  mine = [m for m in messages if str((m.get("author") or {}).get("id")) == bot_id]
+                  others = [m for m in messages if m not in mine and m.get("type", 0) in (0, 19)]
+                  # Un fil fermé n'accepte aucune suppression : on le rouvre le temps du ménage.
+                  if mine and (thread.get("thread_metadata") or {}).get("archived"):
+                      discord.call("PATCH", f"/channels/{tid}", {"archived": False})
+                  for m in mine:
+                      discord.call("DELETE", f"/channels/{tid}/messages/{m['id']}")
+                      deleted += 1
+                  if others:
+                      print(f"#{number} : {len(mine)} message(s) du bot effacé(s), fil gardé "
+                            f"({len(others)} message(s) des potes dedans)")
+                      if (thread.get("thread_metadata") or {}).get("archived"):
+                          discord.call("PATCH", f"/channels/{tid}", {"archived": True})
+                      continue
                   try:
+                      discord.call("DELETE", f"/channels/{tid}")
+                      removed += 1
+                      print(f"#{number} : {len(mine)} message(s) du bot effacé(s), fil vide supprimé")
+                  except RuntimeError:
                       discord.call("PATCH", f"/channels/{tid}", {"archived": True})
                       closed += 1
                       print(f"#{number} : {len(mine)} message(s) du bot effacé(s), fil vide fermé")
-                  except RuntimeError as e:
-                      print(f"#{number} : {len(mine)} message(s) du bot effacé(s), fil laissé tel quel ({e})")
-          print(f"Bilan : {deleted} message(s) effacé(s), {removed} fil(s) supprimé(s), {closed} fil(s) fermé(s).")
+              except RuntimeError as e:
+                  errors += 1
+                  print(f"::error::#{number} (fil {tid}) : {e}")
+          print(f"Bilan : {deleted} message(s) effacé(s), {removed} fil(s) supprimé(s), {closed} fil(s) fermé(s), "
+                f"{errors} erreur(s).")
+          sys.exit(1 if errors else 0)
           PY
