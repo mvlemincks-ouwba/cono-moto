@@ -100,7 +100,7 @@ class _GarageContent extends ConsumerWidget {
     final defaultBike = ref.watch(defaultBikeProvider);
     // Arrondi au km : pas besoin de reconstruire le garage à chaque point GPS.
     final rideKm = ref.watch(
-      rideControllerProvider.select((s) => s.isActive ? (s.distanceM / 1000).floorToDouble() : 0.0),
+      rideControllerProvider.select((s) => s.uncountedKm.floorToDouble()),
     );
     final autonomy = computeAutonomy(bike: bike, rideKm: bike.id == defaultBike?.id ? rideKm : 0, alertKm: alertKm);
     final now = DateTime.now();

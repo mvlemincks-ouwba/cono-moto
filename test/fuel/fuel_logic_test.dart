@@ -184,6 +184,29 @@ void main() {
       expect(out.bike.odometerKm, 10250);
     });
 
+    test('plein complet en route : km de la balade reportés avant la mise à zéro', () {
+      // 200 km depuis le plein, 50 km de balade avant le plein, compteur saisi
+      // (30 050) qui compte déjà ces 50 km.
+      const bike = Bike(id: 'b', name: 'GS', consumptionL100: 5.0, kmSinceFullTank: 200, odometerKm: 30000);
+      final history = [fuel('1', d0, 18)];
+      final e = fuel('2', d0.add(const Duration(days: 1)), 12.5, odo: 30050);
+      final out = applyFuelEntry(bike: bike, entry: e, history: history, rideKm: 50);
+      expect(out.bike.kmSinceFullTank, 0);
+      expect(out.bike.odometerKm, 30050);
+      // 12,5 L pour 250 km (200 + 50 de la balade) = 5 L/100.
+      expect(out.measuredL100, closeTo(5.0, 1e-9));
+      // Sans compteur saisi : le compteur avance quand même des km de balade.
+      final noOdo = applyFuelEntry(bike: bike, entry: fuel('3', d0, 12.5), history: const [], rideKm: 50);
+      expect(noOdo.bike.odometerKm, 30050);
+    });
+
+    test('appoint en route : km de la balade comptés, puis recul de l’équivalent', () {
+      const bike = Bike(id: 'b', name: 'GS', consumptionL100: 5.0, kmSinceFullTank: 200, odometerKm: 30000);
+      final out = applyFuelEntry(bike: bike, entry: fuel('2', d0, 5, full: false), history: const [], rideKm: 50);
+      expect(out.bike.kmSinceFullTank, 150); // 200 + 50 − 100
+      expect(out.bike.odometerKm, 30050);
+    });
+
     test('mesure aberrante ignorée (hors 2–15 L/100)', () {
       const bike = Bike(id: 'b', name: 'MT-07', consumptionL100: 5.0, kmSinceFullTank: 50);
       final history = [fuel('1', d0, 14, odo: 10000)];

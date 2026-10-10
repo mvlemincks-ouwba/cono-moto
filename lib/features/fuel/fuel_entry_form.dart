@@ -99,9 +99,10 @@ class _FuelEntryFormState extends ConsumerState<FuelEntryForm> {
     super.dispose();
   }
 
-  double get _activeRideKm {
+  /// Km de la balade en cours sur [bikeId] pas encore reportés sur la moto.
+  double _rideKmFor(String? bikeId) {
     final ride = ref.read(rideControllerProvider);
-    return ride.isActive ? ride.distanceM / 1000 : 0;
+    return bikeId != null && ride.bikeId == bikeId ? ride.uncountedKm : 0;
   }
 
   /// Pré-remplit le prix avec celui de la station (sauf saisie manuelle).
@@ -126,7 +127,7 @@ class _FuelEntryFormState extends ConsumerState<FuelEntryForm> {
 
   void _applyOdometer(Bike? bike) {
     if (bike == null || _odometerEdited) return;
-    final km = bike.odometerKm + _activeRideKm;
+    final km = bike.odometerKm + _rideKmFor(bike.id);
     _odometer.text = km > 0 ? km.round().toString() : '';
   }
 
@@ -209,9 +210,19 @@ class _FuelEntryFormState extends ConsumerState<FuelEntryForm> {
       final bike = bikeId == null ? null : await repo.bike(bikeId);
       if (bike != null) {
         final history = await repo.fuelEntries(bikeId: bike.id);
-        final outcome = applyFuelEntry(bike: bike, entry: entry, history: history, now: DateTime.now());
+        // Plein en route : les km déjà roulés sont reportés sur la moto
+        // maintenant, et ne seront pas recomptés à l'arrêt de la balade.
+        final rideKm = _rideKmFor(bike.id);
+        final outcome = applyFuelEntry(
+          bike: bike,
+          entry: entry,
+          history: history,
+          now: DateTime.now(),
+          rideKm: rideKm,
+        );
         await repo.upsertFuel(entry);
         await repo.upsertBike(outcome.bike);
+        ref.read(rideControllerProvider.notifier).markGarageKmCounted(bike.id, rideKm);
         final m = outcome.measuredL100;
         if (m != null && outcome.consumptionUpdated) {
           message = 'Plein enregistré · conso mesurée ${Fmt.number(m, decimals: 1)} L/100 km';
@@ -257,7 +268,7 @@ class _FuelEntryFormState extends ConsumerState<FuelEntryForm> {
     final bike = bikes.where((b) => b.id == _bikeId).firstOrNull;
     final station = widget.station;
     final total = parseUserNumber(_total.text);
-    final estimate = bike == null ? null : litersToFill(bike, extraKm: _activeRideKm);
+    final estimate = bike == null ? null : litersToFill(bike, extraKm: _rideKmFor(bike.id));
 
     final numberKeyboard = const TextInputType.numberWithOptions(decimal: true);
     final numberFilter = [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,\s]'))];

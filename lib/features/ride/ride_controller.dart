@@ -69,6 +69,7 @@ class RideSessionState {
     this.smsAllowed = false,
     this.locationAccess,
     this.lastRideId,
+    this.garageKmCounted = 0,
   });
 
   final RideStatus status;
@@ -140,6 +141,16 @@ class RideSessionState {
   /// Dernière balade enregistrée (après stop()).
   final String? lastRideId;
 
+  /// Km de cette balade déjà reportés sur la moto (compteur, « depuis le
+  /// plein ») par un plein saisi en route. Le reste est ajouté à l'arrêt.
+  final double garageKmCounted;
+
+  /// Km de la balade en cours pas encore reportés sur la moto.
+  double get uncountedKm {
+    final km = distanceM / 1000 - garageKmCounted;
+    return isActive && km > 0 ? km : 0.0;
+  }
+
   bool get isActive => status == RideStatus.recording || status == RideStatus.paused || status == RideStatus.starting;
 
   bool get isPaused => status == RideStatus.paused;
@@ -176,6 +187,7 @@ class RideSessionState {
     bool? lowFuelAlert,
     bool? crashDetectionArmed,
     bool? smsAllowed,
+    double? garageKmCounted,
   }) => RideSessionState(
     status: status ?? this.status,
     rideId: rideId,
@@ -211,6 +223,7 @@ class RideSessionState {
     smsAllowed: smsAllowed ?? this.smsAllowed,
     locationAccess: locationAccess,
     lastRideId: lastRideId,
+    garageKmCounted: garageKmCounted ?? this.garageKmCounted,
   );
 }
 
@@ -400,6 +413,7 @@ class RideController extends Notifier<RideSessionState> {
           ride.copyWith(events: List.of(_sessionEvents)),
           endedAt: now,
           routeName: state.route?.name,
+          garageKmCounted: state.garageKmCounted,
         );
       }
     } catch (e, st) {
@@ -416,6 +430,13 @@ class RideController extends Notifier<RideSessionState> {
   Future<Ride?> recoverUnfinished() async {
     if (_ride != null || state.status != RideStatus.idle) return null;
     return _finalizeOrphans();
+  }
+
+  /// Un plein saisi en route a reporté [km] de cette balade sur la moto
+  /// [bikeId] : ils ne seront pas ajoutés une seconde fois à l'arrêt.
+  void markGarageKmCounted(String bikeId, double km) {
+    if (!state.isActive || state.bikeId != bikeId || km <= 0) return;
+    state = state.copyWith(garageKmCounted: state.garageKmCounted + km);
   }
 
   /// Masque le bandeau « réserve » du HUD.
@@ -709,7 +730,7 @@ class RideController extends Notifier<RideSessionState> {
 
   /// Calcule et enregistre la version finale d'une balade à partir de ses
   /// points stockés.
-  Future<Ride?> _finalize(Ride ride, {DateTime? endedAt, String? routeName}) async {
+  Future<Ride?> _finalize(Ride ride, {DateTime? endedAt, String? routeName, double garageKmCounted = 0}) async {
     final points = await _rides.points(ride.id);
     final settings = ref.read(settingsProvider);
     final config = RideStatsConfig(hardBrakeThresholdG: settings.hardBrakeThresholdG);
@@ -749,9 +770,11 @@ class RideController extends Notifier<RideSessionState> {
     await _store.save(finalRide);
 
     final bikeId = ride.bikeId;
-    if (bikeId != null && stats.distanceKm > 0.01) {
+    // Les km déjà reportés par un plein en route ne sont pas recomptés.
+    final garageKm = stats.distanceKm - garageKmCounted;
+    if (bikeId != null && garageKm > 0.01) {
       try {
-        await _garage.addDistance(bikeId, double.parse(stats.distanceKm.toStringAsFixed(2)));
+        await _garage.addDistance(bikeId, double.parse(garageKm.toStringAsFixed(2)));
         await _maintenanceCheck(bikeId);
       } catch (e) {
         debugPrint('Mise à jour du garage : $e');

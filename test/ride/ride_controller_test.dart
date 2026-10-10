@@ -7,6 +7,7 @@ import 'package:cono_moto/data/database.dart';
 import 'package:cono_moto/data/models/garage.dart';
 import 'package:cono_moto/data/models/planned_route.dart';
 import 'package:cono_moto/data/models/ride.dart';
+import 'package:cono_moto/features/fuel/fuel_logic.dart';
 import 'package:cono_moto/features/garage/autonomy.dart';
 import 'package:cono_moto/features/ride/crash_alert_controller.dart';
 import 'package:cono_moto/features/ride/ride_controller.dart';
@@ -123,6 +124,68 @@ void main() {
 
     final bike = await garage.bike('mt07');
     expect(bike!.odometerKm, closeTo(1002, 0.05));
+    await h.dispose();
+  });
+
+  test('plein fait en route : autonomie d’un réservoir plein, km comptés une seule fois', () async {
+    final h = await Harness.create();
+    final garage = h.container.read(garageRepositoryProvider);
+    // 20 L à 5 L/100 : 10 L restants au départ (200 km depuis le plein).
+    const gs = Bike(
+      id: 'gs',
+      name: 'R 1250 GS',
+      isDefault: true,
+      tankLiters: 20,
+      consumptionL100: 5,
+      kmSinceFullTank: 200,
+      odometerKm: 30000,
+    );
+    await garage.upsertBike(gs);
+    final sub = h.container.listen(autonomyProvider, (_, _) {});
+    await h.ctrl.start();
+    await h.ride(60, 121); // ≈ 2 km
+    final before = h.state.uncountedKm;
+    expect(before, closeTo(2, 0.05));
+
+    // Plein complet saisi pendant la balade (comme FuelEntryForm._save).
+    final bike = (await garage.bike('gs'))!;
+    final entry = FuelEntry(
+      id: 'f1',
+      date: h.platform.clock,
+      liters: 10.1,
+      pricePerLiter: 1.9,
+      bikeId: 'gs',
+      odometerKm: 30002,
+    );
+    final out = applyFuelEntry(bike: bike, entry: entry, history: const [], rideKm: before);
+    await garage.upsertFuel(entry);
+    await garage.upsertBike(out.bike);
+    h.ctrl.markGarageKmCounted('gs', before);
+    expect(h.state.uncountedKm, closeTo(0, 0.01));
+    for (var i = 0; i < 5; i++) {
+      await h.pump();
+    }
+    expect(sub.read()!.remainingKm, closeTo(400, 1), reason: 'réservoir plein juste après le plein');
+
+    await h.ride(60, 120); // ≈ 2 km de plus
+    expect(sub.read()!.remainingKm, closeTo(398, 1));
+    await h.ctrl.stop();
+    final after = (await garage.bike('gs'))!;
+    expect(after.odometerKm, closeTo(30004, 0.1), reason: 'pas de km comptés deux fois');
+    expect(after.kmSinceFullTank, closeTo(2, 0.1));
+    sub.close();
+    await h.dispose();
+  });
+
+  test('plein pour une autre moto pendant la balade : rien n’est marqué comme compté', () async {
+    final h = await Harness.create();
+    await h.container.read(garageRepositoryProvider).upsertBike(const Bike(id: 'mt07', name: 'MT-07', isDefault: true));
+    await h.ctrl.start();
+    await h.ride(60, 61);
+    h.ctrl.markGarageKmCounted('autre', 1);
+    expect(h.state.garageKmCounted, 0);
+    await h.ctrl.stop(save: false);
+    expect(h.state.uncountedKm, 0, reason: 'plus de balade en cours');
     await h.dispose();
   });
 

@@ -69,6 +69,8 @@ final autonomyProvider = Provider<AutonomyInfo?>((ref) {
   final bike = ref.watch(defaultBikeProvider);
   if (bike == null) return null;
   final alertKm = ref.watch(settingsProvider.select((s) => s.autonomyAlertKm));
-  final rideKm = ref.watch(rideControllerProvider.select((s) => s.isActive ? s.distanceM / 1000 : 0.0));
+  // Seuls les km pas encore reportés sur la moto (un plein en route les a
+  // déjà comptés).
+  final rideKm = ref.watch(rideControllerProvider.select((s) => s.uncountedKm));
   return computeAutonomy(bike: bike, rideKm: rideKm, alertKm: alertKm);
 });
