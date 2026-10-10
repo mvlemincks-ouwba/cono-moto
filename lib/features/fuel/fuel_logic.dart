@@ -233,12 +233,21 @@ class FuelEntryOutcome {
 ///
 /// Un plein saisi après coup (plus ancien qu'un autre plein, ou de plus de
 /// 24 h avant [now]) ne touche pas au niveau du réservoir.
+///
+/// [rideKm] : km de la balade en cours pas encore reportés sur la moto (plein
+/// fait en route). Ils sont ajoutés au compteur et aux km depuis le plein
+/// avant d'appliquer le plein ; l'appelant les marque comme comptés pour que
+/// l'arrêt de la balade ne les ajoute pas une seconde fois.
 FuelEntryOutcome applyFuelEntry({
   required Bike bike,
   required FuelEntry entry,
   required List<FuelEntry> history,
   DateTime? now,
+  double rideKm = 0,
 }) {
+  if (rideKm > 0) {
+    bike = bike.copyWith(kmSinceFullTank: bike.kmSinceFullTank + rideKm, odometerKm: bike.odometerKm + rideKm);
+  }
   final conso = bike.consumptionL100 > 0 ? bike.consumptionL100 : 5.5;
   final odometer = entry.odometerKm != null && entry.odometerKm! > bike.odometerKm
       ? entry.odometerKm!
